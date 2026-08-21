@@ -16,7 +16,6 @@ from typing import Any, Optional
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from config import CLIENT_ROOT, get_settings
@@ -70,8 +69,11 @@ app.add_middleware(
     allow_headers=["Content-Type"],
 )
 
-if STATIC_DIR.exists():
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+_STATIC_TYPES = {
+    "styles.css": "text/css; charset=utf-8",
+    "chat.js": "application/javascript; charset=utf-8",
+    "index.html": "text/html; charset=utf-8",
+}
 
 
 class ChatIn(BaseModel):
@@ -139,9 +141,23 @@ async def index(request: Request):
         return JSONResponse({"error": "Chat UI not found."}, status_code=503)
     session_id = _sid(request)
     _bag(session_id)
-    body = FileResponse(page)
+    body = FileResponse(page, media_type="text/html; charset=utf-8")
     _set_session_cookie(body, session_id)
     return body
+
+
+@app.get("/health")
+async def health():
+    return {"ok": True}
+
+
+@app.get("/static/{filename}")
+async def static_asset(filename: str):
+    media = _STATIC_TYPES.get(filename)
+    path = STATIC_DIR / filename
+    if not media or not path.is_file():
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    return FileResponse(path, media_type=media)
 
 
 @app.get("/auth/me")
