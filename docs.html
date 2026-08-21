@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Hotel ChatBot — project document</title>
+  <title>Hotel ChatBot — interviewer brief</title>
   <style>
     :root {
       --ink: #161410;
@@ -51,7 +51,7 @@
     nav a:hover { color: var(--copper); }
     nav .sec { margin-top: 16px; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: #9a9086; }
     main { padding: 32px 28px 72px 12px; }
-    h2 { font-size: 26px; margin: 36px 0 12px; font-weight: 600; }
+    h2 { font-size: 26px; margin: 40px 0 12px; font-weight: 600; }
     h2:first-child { margin-top: 0; }
     h3 { font-size: 18px; margin: 22px 0 8px; }
     p, li { font-size: 16px; }
@@ -80,283 +80,474 @@
       background: #f7f1e8;
       margin: 16px 0;
     }
+    .qa {
+      border-top: 1px solid var(--line);
+      padding: 16px 0 4px;
+    }
+    .qa .q {
+      margin: 0 0 8px;
+      font-size: 17px;
+      font-weight: 600;
+    }
+    .qa .a { margin: 0 0 8px; }
     footer { margin-top: 48px; color: var(--muted); font-size: 14px; }
     @media (max-width: 800px) {
       .layout { grid-template-columns: 1fr; }
       nav { display: none; }
     }
+    @media print {
+      nav, .top { position: static; }
+      .layout { display: block; }
+      nav { display: none; }
+      a { color: inherit; text-decoration: none; }
+    }
   </style>
 </head>
 <body>
   <div class="top">
-    <h1>Hotel ChatBot</h1>
-    <span>Pune catalog · MCP · Claude · MongoDB</span>
+    <h1>Hotel ChatBot — interviewer brief</h1>
+    <span>MCP stdio · Claude tool loop · MongoDB · Render</span>
   </div>
   <div class="layout">
     <nav>
-      <div class="sec">Overview</div>
-      <a href="#what">What this is</a>
-      <a href="#run">How to run locally</a>
-      <a href="#deploy">Deploy on Render</a>
-      <a href="#guest">Guest profile</a>
-      <a href="#flow">Request flow</a>
-      <div class="sec">Code</div>
+      <div class="sec">Pitch</div>
+      <a href="#pitch">60-second pitch</a>
+      <a href="#demo">Live demo script</a>
+      <a href="#what">What it is</a>
+      <div class="sec">Architecture</div>
+      <a href="#mcp">Why MCP</a>
+      <a href="#flow">Request path</a>
+      <a href="#loop">Claude tool loop</a>
       <a href="#tree">Folders</a>
-      <a href="#mongo">MongoDB</a>
       <a href="#tools">16 tools</a>
-      <a href="#env">Environment</a>
+      <a href="#mongo">MongoDB</a>
+      <a href="#guest">Identity</a>
+      <a href="#photos">Photos</a>
+      <a href="#ui">Chat UI</a>
       <a href="#security">Security</a>
+      <div class="sec">Ship</div>
+      <a href="#run">Local run</a>
+      <a href="#deploy">Render</a>
+      <a href="#limits">Limits &amp; next</a>
+      <div class="sec">Interview</div>
+      <a href="#qa-mcp">MCP &amp; tools</a>
+      <a href="#qa-sec">Security &amp; identity</a>
+      <a href="#qa-data">Data &amp; product</a>
+      <a href="#qa-ops">Ops &amp; tradeoffs</a>
     </nav>
     <main>
-      <h2 id="what">What this is</h2>
+      <h2 id="pitch">60-second pitch</h2>
       <p class="lede">
-        A Pune hotel concierge chat. The browser talks to a FastAPI client.
-        The client talks to Claude. Claude calls 16 MCP tools. Those tools
-        read and write MongoDB — hotels, bookings, and users.
+        I built a Pune hotel concierge as a real MCP product, not a notebook demo.
+        The browser never talks to Claude. A FastAPI host runs a Claude tool loop
+        and spawns a separate MCP stdio server whose 16 tools are the only way
+        to read hotels or write bookings in MongoDB.
       </p>
       <p>
-        Dummy bookings are real database records, not memory. A guest can
-        only view, change, or cancel stays booked with <strong>their own
-        email and 10-digit mobile</strong>. There is no payment gateway.
-        Chat is ordinary HTTP <code>POST /chat</code> (not Socket.IO).
+        That split is the point. The language model is a planner. The hotel
+        catalog and reservations are a protocol-bounded tool server. Ownership
+        is enforced in Python — signed-in mobile <strong>and</strong> email —
+        because you do not trust a model to decide who can cancel BK-1001.
       </p>
-
-      <h2 id="run">How to run locally</h2>
-      <ol>
-        <li>Confirm <span class="file">HOTEL-CHATBOT-CLIENT/.env</span> has <code>ANTHROPIC_API_KEY</code>.</li>
-        <li>Confirm <span class="file">HOTEL-CHATBOT-MCP/.env</span> has <code>MONGODB_URI</code> and <code>MONGODB_DB=hotel_chatbot</code>.</li>
-        <li>Start the client (it also starts the MCP server as a child process):</li>
-      </ol>
-      <pre>cd HOTEL-CHATBOT-CLIENT
-./.venv/bin/python app.py</pre>
-      <p>Open <a href="http://127.0.0.1:8000">http://127.0.0.1:8000</a>. Stop with Ctrl+C, then start again after Python changes (no auto-reload).</p>
-      <div class="callout">
-        Never paste the Claude key or MongoDB password into the chat UI, this HTML, or frontend JS.
-      </div>
-
-      <h2 id="deploy">Deploy on Render (step by step)</h2>
-      <p>
-        Deploy <strong>one</strong> web service. The MCP hotel tools run as a child
-        process inside the same Docker image. Hugging Face Docker Spaces are
-        paid for many free accounts, so this project uses Render.
-      </p>
-      <p>Public GitHub repo: <a href="https://github.com/shelarrohit45/Hotel-ChatBot">github.com/shelarrohit45/Hotel-ChatBot</a></p>
-
-      <h3>1. Push the code to GitHub</h3>
-      <p>Do not commit <span class="file">.env</span> files. From the project root:</p>
-      <pre>git add -A
-git status    # confirm no .env files
-git commit -m "Deploy hotel chatbot"
-git push origin main</pre>
-
-      <h3>2. Allow MongoDB Atlas from the internet</h3>
-      <ol>
-        <li>Open <a href="https://cloud.mongodb.com">cloud.mongodb.com</a> and sign in.</li>
-        <li><strong>Network Access</strong> → <strong>Add IP Address</strong>.</li>
-        <li>Click <strong>Allow Access from Anywhere</strong> (<code>0.0.0.0/0</code>) → Confirm.</li>
-      </ol>
-      <p>Without this, Render cannot reach the hotel catalog.</p>
-
-      <h3>3. Create a Render web service</h3>
-      <ol>
-        <li>Open <a href="https://dashboard.render.com">dashboard.render.com</a> and sign in with GitHub.</li>
-        <li><strong>New</strong> → <strong>Web Service</strong>.</li>
-        <li>Connect the repo <code>shelarrohit45/Hotel-ChatBot</code> (or your fork).</li>
-        <li>Set:
-          <ul>
-            <li><strong>Runtime:</strong> Docker (uses the repo-root <span class="file">Dockerfile</span>)</li>
-            <li><strong>Branch:</strong> <code>main</code></li>
-            <li><strong>Instance type:</strong> Free</li>
-          </ul>
-        </li>
-      </ol>
-
-      <h3>4. Add environment variables</h3>
-      <p>In the Render service → <strong>Environment</strong>. Copy values from your local <span class="file">.env</span> files. Do not put them in GitHub.</p>
-      <table>
-        <thead><tr><th>Name</th><th>Value</th><th>Where it comes from</th></tr></thead>
-        <tbody>
-          <tr><td><code>ANTHROPIC_API_KEY</code></td><td>your Claude key</td><td><span class="file">HOTEL-CHATBOT-CLIENT/.env</span> (secret)</td></tr>
-          <tr><td><code>ANTHROPIC_MODEL</code></td><td><code>claude-haiku-4-5</code></td><td>same as local, or the model you use</td></tr>
-          <tr><td><code>MONGODB_URI</code></td><td>Atlas connection string</td><td><span class="file">HOTEL-CHATBOT-MCP/.env</span> (secret)</td></tr>
-          <tr><td><code>MONGODB_DB</code></td><td><code>hotel_chatbot</code></td><td>database name</td></tr>
-          <tr><td><code>COOKIE_SECURE</code></td><td><code>true</code></td><td>required on HTTPS</td></tr>
-        </tbody>
-      </table>
-      <p>Docker already sets MCP paths inside the image. You do not need the Mac <code>MCP_SERVER_*</code> paths on Render.</p>
-
-      <h3>5. Deploy and open the URL</h3>
-      <ol>
-        <li>Click <strong>Create Web Service</strong> (or <strong>Manual Deploy</strong> after a git push).</li>
-        <li>Wait until logs show <code>Hotel chat API ready</code> and Uvicorn listening.</li>
-        <li>Open the URL Render gives you, for example:<br />
-          <a href="https://hotel-chatbot-42t0.onrender.com/">https://hotel-chatbot-42t0.onrender.com/</a></li>
-      </ol>
-
-      <h3>What to expect on the free plan</h3>
       <ul>
-        <li>The service <strong>sleeps</strong> after idle. The first visit can show a plain “Not Found” for about a minute. Wait, then refresh.</li>
-        <li>Anyone who uses the live chat spends <strong>your</strong> Claude credits.</li>
-        <li>After each <code>git push origin main</code>, Render rebuilds if auto-deploy is on.</li>
+        <li><strong>Live:</strong> <a href="https://hotel-chatbot-42t0.onrender.com/">hotel-chatbot-42t0.onrender.com</a></li>
+        <li><strong>Code:</strong> <a href="https://github.com/shelarrohit45/Hotel-ChatBot">github.com/shelarrohit45/Hotel-ChatBot</a></li>
+        <li><strong>Stack:</strong> FastAPI, Anthropic Messages + tool_use, official MCP Python SDK (stdio), MongoDB Atlas, Docker on Render</li>
+        <li><strong>Catalog:</strong> 50 Pune hotels. Dummy bookings persist. No payment gateway.</li>
       </ul>
 
-      <h3>If search says the database is down</h3>
+      <h2 id="demo">How to walk an interviewer through it</h2>
       <ol>
-        <li>Confirm <code>MONGODB_URI</code> and <code>MONGODB_DB</code> are set on Render (not only on your Mac).</li>
-        <li>Confirm Atlas Network Access includes <code>0.0.0.0/0</code>.</li>
-        <li>The MCP child process must inherit those env vars (handled in <span class="file">CLIENT/mcp_bridge.py</span>).</li>
+        <li>Open the live URL. First screen is guest identity (name, email, 10-digit mobile) — not Google OAuth. Cookie <code>hotel_sid</code> is httponly.</li>
+        <li>Chat: “2 guests in Pune from 10 to 12 Sep 2026”. Composer stays at the bottom; replies scroll above it.</li>
+        <li>“Show me photos of JW Marriott” — pictures come from tool JSON, not from URLs pasted in the model text.</li>
+        <li>Book a room. Booking id looks like <code>BK-1xxx</code>. It is a Mongo document, not chat memory.</li>
+        <li>“What are my bookings?” then cancel. Log out, sign in as someone else, try the same <code>BK-…</code> — it must refuse.</li>
+        <li>Ask for weather or Python. Guardrails / system prompt keep it on Pune hotels.</li>
       </ol>
+      <div class="callout">
+        Free Render sleeps. First load can show a plain “Not Found” for about a minute. Wait, then refresh. That is the platform, not a 404 in the app.
+      </div>
 
-      <h2 id="guest">Guest profile</h2>
+      <h2 id="what">What this is</h2>
       <p>
-        First visit asks for <strong>name, email, and 10-digit mobile</strong>. That profile is
-        stored in MongoDB <code>users</code> and kept in the session cookie until
-        <strong>Log out</strong>. Bookings reuse those details — the chat does not ask again.
+        A two-process product in one repo. <span class="file">HOTEL-CHATBOT-CLIENT</span>
+        is the MCP <em>host</em>: HTTP, sessions, Claude, guardrails, UI.
+        <span class="file">HOTEL-CHATBOT-MCP</span> is the MCP <em>server</em>:
+        JSON-RPC over stdio, 16 tools, MongoDB. The host spawns the server as a
+        child process. Same pattern you use when Cursor talks to an MCP server —
+        except here the host is our FastAPI app, not the IDE.
       </p>
-      <pre>GET  /auth/me       → { user }
-POST /auth/guest    → save name, email, mobile
-POST /auth/logout   → clear session
-POST /chat          → 401 until the guest form is saved</pre>
       <p>
-        Cancel, modify, and “my bookings” only work for reservations that match
-        this guest’s mobile <strong>and</strong> email. Another person who knows a
-        <code>BK-…</code> id cannot change it.
+        Chat is ordinary <code>POST /chat</code>. Not Socket.IO, not websockets.
+        Each turn is request/response JSON: <code>{ text, blocked, images }</code>.
+        The model may take up to 8 tool rounds before that JSON is returned.
       </p>
-      <h3>Try in chat</h3>
-      <pre>Find hotels in Pune for 2 guests from 10 to 12 Sep 2026
-Book Courtyard Hinjewadi
-What are my bookings?
-Cancel BK-1001</pre>
+
+      <h2 id="mcp">Why MCP (not “just function calling in app.py”)</h2>
+      <p>
+        Anthropic tool_use is how Claude <em>asks</em> to call something. MCP is
+        how that something is <em>exposed as a server</em> with typed tools,
+        list/call, and a transport. I kept them stacked:
+      </p>
+      <ul>
+        <li><strong>Claude tool_use</strong> — model chooses name + arguments from the host’s tool list.</li>
+        <li><strong>Host allowlist</strong> — <span class="file">guardrails.py</span> only forwards the 16 hotel names. The model cannot invent <code>os.system</code>.</li>
+        <li><strong>MCP server</strong> — official SDK <code>Server</code> over stdio. <code>list_tools</code> / <code>call_tool</code>. Business logic stays in <span class="file">tools.py</span>.</li>
+      </ul>
+      <p>
+        I used the low-level MCP <code>Server</code>, not FastMCP decorators, so
+        each tool’s JSON Schema (date format, required fields, minimums) is
+        exactly what we wrote. Decorators are fine for prototypes; they get in
+        the way when the schema <em>is</em> the contract.
+      </p>
+      <p>
+        Stdio, not Streamable HTTP, because this server has one consumer: our
+        host. HTTP MCP is for many clients, auth at the edge, shared deployments.
+        A child process with a locked-down command path is the smaller attack
+        surface for a demo that still looks like production MCP.
+      </p>
 
       <h2 id="flow">How a question travels</h2>
-      <pre>Browser  The Desk UI
-  → POST /chat   (httponly cookie hotel_sid, no API key)
-  → guardrails   (jailbreak, topic, rate limit 20/min)
-  → Claude       (system = CLAUDE.md + skills.md)
-      if tool_use:
-        → allowlist (16 names)
-        → inject signed-in guest into book / list / cancel / modify
-        → MCP stdio  HOTEL-CHATBOT-MCP/server.py
-        → tools.py   → MongoDB hotel_chatbot
-  → JSON { text, blocked }
-  → chat UI  (tool names are never shown)</pre>
+      <pre>Browser  The Desk UI  (no API key, no Mongo URI)
+  → POST /chat   httponly cookie hotel_sid
+  → FastAPI      session + guest from Mongo users/sessions
+  → rate limit   20 POSTs / minute / cookie
+  → guardrails   sanitize, jailbreak, Pune/hotel topic
+  → Claude       system = CLAUDE.md + skills.md + signed-in guest
+      if tool_use (repeat up to 8 rounds):
+        → validate_tool_call (allowlist + arg size)
+        → overwrite guest_name / email / mobile on book/list/cancel/modify
+        → MCP stdio  ClientSession.call_tool
+        → server.py  execute_tool
+        → tools.py   MongoDB hotel_chatbot
+        → collect image_url / images for the UI
+  → redact output (secrets, tool names)
+  → JSON { text, blocked, images[] }
+  → UI renders text + photo gallery</pre>
+
+      <h2 id="loop">Claude tool loop (host)</h2>
+      <p>
+        <span class="file">orchestrator.py</span> is a classic agent loop, not a
+        chatbot wrapper. History is Anthropic messages: user text, assistant
+        blocks (text and/or tool_use), then user tool_result blocks. If the API
+        rejects a mismatched tool_result (truncated history), we reset to the
+        current user turn and continue — better a short memory than a 500.
+      </p>
+      <ul>
+        <li>Max 8 tool rounds, 24 history messages, tool JSON truncated at 8k chars for the model (full payload still used for photos).</li>
+        <li>System prompt is loaded once from disk: scope in <span class="file">CLAUDE.md</span>, routing playbook in <span class="file">skills.md</span>.</li>
+        <li>Default booking chain: search → details → room → availability → price → create. skills.md exists so the model does not rediscover that every turn.</li>
+      </ul>
 
       <h2 id="tree">Folders</h2>
       <pre>Hotel-ChatBot/
-├── docs.html                      ← this document
-├── Dockerfile                     ← client + MCP in one image (Render)
-├── README.md                      ← Hugging Face / Docker metadata
+├── docs.html                      ← this interviewer brief
+├── Dockerfile                     ← one image: FastAPI + MCP child
+├── README.md                      ← leftover HF Docker metadata
 ├── HOTEL-CHATBOT-MCP/
 │   ├── server.py                  ← MCP stdio (list_tools / call_tool)
-│   ├── tools.py                   ← 16 tool definitions + handlers
-│   ├── db.py                      ← MongoDB hotels / bookings / users
-│   ├── requirements.txt
-│   ├── .env                       ← MONGODB_URI (not committed)
+│   ├── tools.py                   ← 16 schemas + handlers + ownership
+│   ├── db.py                      ← Mongo hotels / bookings / users
+│   ├── seed_hotel_images.py       ← two Unsplash URLs per hotel
+│   ├── .env                       ← MONGODB_URI (gitignored)
 │   └── .venv/
 └── HOTEL-CHATBOT-CLIENT/
-    ├── app.py                     ← FastAPI GET /  POST /chat
-    ├── config.py
-    ├── guardrails.py
-    ├── mcp_bridge.py              ← spawns MCP; passes env (Mongo URI)
-    ├── orchestrator.py            ← Claude + tool loop
-    ├── CLAUDE.md                  ← system scope
-    ├── skills.md                  ← when to call which tool
+    ├── app.py                     ← GET /  POST /chat  /auth/*
+    ├── config.py                  ← paths from env, never from chat
+    ├── guardrails.py              ← input / allowlist / CSP / redact
+    ├── mcp_bridge.py              ← spawn MCP; pass full env (Mongo)
+    ├── orchestrator.py            ← Claude + tool loop + photos
+    ├── user_store.py              ← guest upsert / session cookie row
+    ├── CLAUDE.md / skills.md      ← system prompt
     ├── static/                    ← The Desk UI
-    ├── .env                       ← ANTHROPIC_API_KEY (not committed)
+    ├── .env                       ← ANTHROPIC_API_KEY (gitignored)
     └── .venv/</pre>
-
-      <h3>What each file does</h3>
       <table>
-        <thead><tr><th>File</th><th>Role</th></tr></thead>
+        <thead><tr><th>File</th><th>Why it exists</th></tr></thead>
         <tbody>
-          <tr><td><span class="file">Dockerfile</span></td><td>One image: FastAPI chat + MCP child process.</td></tr>
-          <tr><td><span class="file">MCP/server.py</span></td><td>Official MCP Server over stdio. No business logic.</td></tr>
-          <tr><td><span class="file">MCP/tools.py</span></td><td>Tool schemas and handlers. Search, book, cancel. Ownership checks.</td></tr>
-          <tr><td><span class="file">MCP/db.py</span></td><td>Mongo connection, indexes, hotel/booking/user queries.</td></tr>
-          <tr><td><span class="file">CLIENT/app.py</span></td><td>HTTP API. Cookie session. Serves HTML, CSS, JS.</td></tr>
-          <tr><td><span class="file">CLIENT/orchestrator.py</span></td><td>Claude Messages API + up to 8 tool rounds. Fills guest identity.</td></tr>
-          <tr><td><span class="file">CLIENT/mcp_bridge.py</span></td><td>Spawns MCP python + server.py. Forwards process env to the child.</td></tr>
-          <tr><td><span class="file">CLIENT/guardrails.py</span></td><td>Sanitize, jailbreak, Pune/hotel topic, tool allowlist, CSP. Strips tool names from replies.</td></tr>
-          <tr><td><span class="file">CLIENT/user_store.py</span></td><td>Saves guest name, email, mobile in MongoDB.</td></tr>
+          <tr><td><span class="file">MCP/server.py</span></td><td>Protocol only. No hotel math. If you mix protocol and bookings, you cannot swap the host.</td></tr>
+          <tr><td><span class="file">MCP/tools.py</span></td><td>Contract + execution. FIELD_MAPPINGS project Mongo docs so Claude does not swallow whole room trees on search.</td></tr>
+          <tr><td><span class="file">MCP/db.py</span></td><td>Indexes, phone normalization (last 10 digits), overlap queries, user upsert.</td></tr>
+          <tr><td><span class="file">CLIENT/mcp_bridge.py</span></td><td>Stdio client. Command/args/cwd from config. Env copied into the child — default MCP stdio only keeps PATH/HOME, which broke Atlas on Render.</td></tr>
+          <tr><td><span class="file">CLIENT/orchestrator.py</span></td><td>The host brain: tool loop, guest injection, photo harvest, photo-intent fallback.</td></tr>
+          <tr><td><span class="file">CLIENT/app.py</span></td><td>HTTP edge. Explicit <code>/static/{filename}</code> because a mount 404’d on Render.</td></tr>
         </tbody>
       </table>
 
-      <h2 id="mongo">MongoDB</h2>
-      <p>Database name: <code>hotel_chatbot</code>. URI lives in <span class="file">HOTEL-CHATBOT-MCP/.env</span> locally, and in Render environment variables in production.</p>
+      <h2 id="tools">16 MCP tools</h2>
+      <p>Guests never see these names. The UI and output redaction strip them.</p>
       <table>
-        <thead><tr><th>Collection</th><th>Key</th><th>Contents</th></tr></thead>
+        <thead><tr><th>Tool</th><th>Job</th><th>Needs</th></tr></thead>
         <tbody>
-          <tr><td><code>hotels</code></td><td><code>hotel_id</code> e.g. HTL-PUN-013</td><td>50 Pune hotels, rooms, rates, reviews, amenities.</td></tr>
-          <tr><td><code>users</code></td><td>10-digit <code>mobile</code></td><td>Name, email, booking_ids.</td></tr>
-          <tr><td><code>bookings</code></td><td><code>booking_id</code> e.g. BK-1001</td><td>Hotel, room, dates, guest, status, total INR. Cancel sets status to cancelled; the row stays.</td></tr>
-          <tr><td><code>sessions</code></td><td>cookie id</td><td>Logged-in guest until Log out.</td></tr>
-          <tr><td><code>counters</code></td><td><code>booking_seq</code></td><td>Next booking number.</td></tr>
+          <tr><td><code>search_hotels</code></td><td>Pune catalog for dates / guests / rooms</td><td>city, check_in, check_out, guests, rooms</td></tr>
+          <tr><td><code>search_hotels_by_location</code></td><td>Near lat/lng (Hinjewadi, Koregaon Park)</td><td>latitude, longitude, radius km</td></tr>
+          <tr><td><code>get_hotel_details</code></td><td>Property + photos</td><td>hotel_id</td></tr>
+          <tr><td><code>get_hotel_amenities</code></td><td>Facilities</td><td>hotel_id</td></tr>
+          <tr><td><code>get_hotel_reviews</code></td><td>Comments</td><td>hotel_id</td></tr>
+          <tr><td><code>get_room_details</code></td><td>Beds, occupancy, plans</td><td>hotel_id, room_id</td></tr>
+          <tr><td><code>check_hotel_availability</code></td><td>Inventory minus overlapping confirmed stays</td><td>hotel_id, room_id, dates, guests</td></tr>
+          <tr><td><code>get_hotel_rates</code></td><td>Rate plans</td><td>hotel_id, room_id, dates, guests</td></tr>
+          <tr><td><code>get_booking_price</code></td><td>INR total</td><td>hotel_id, room_id, dates, guests</td></tr>
+          <tr><td><code>get_cancellation_policy</code></td><td>Refund window</td><td>hotel_id, room_id, rate_id</td></tr>
+          <tr><td><code>create_booking</code></td><td>Insert booking; guest fields overwritten by host</td><td>ids, dates, guests + signed-in identity</td></tr>
+          <tr><td><code>get_booking</code></td><td>One stay if owner</td><td>booking_id + mobile + email</td></tr>
+          <tr><td><code>list_bookings</code></td><td>My stays</td><td>signed-in mobile + email</td></tr>
+          <tr><td><code>get_booking_status</code></td><td>Confirmed / cancelled</td><td>booking_id + mobile + email</td></tr>
+          <tr><td><code>modify_booking</code></td><td>Change dates/room if owner and still available</td><td>booking_id + identity</td></tr>
+          <tr><td><code>cancel_booking</code></td><td>Soft cancel (status=cancelled, row kept)</td><td>booking_id + identity</td></tr>
+        </tbody>
+      </table>
+      <p>IDs: hotel <code>HTL-PUN-013</code>, room <code>HTL-PUN-013-DLX</code>, rate <code>HTL-PUN-013-DLX-FLEX</code>, booking <code>BK-1001</code>. Dates <code>YYYY-MM-DD</code>. City is Pune-only in this catalog.</p>
+
+      <h2 id="mongo">MongoDB</h2>
+      <p>Database <code>hotel_chatbot</code>. URI never in the browser, HTML, or chat.</p>
+      <table>
+        <thead><tr><th>Collection</th><th>Key</th><th>What is in it</th></tr></thead>
+        <tbody>
+          <tr><td><code>hotels</code></td><td><code>hotel_id</code></td><td>50 Pune properties, rooms, rates, reviews, <code>image_url</code> + <code>images[2]</code></td></tr>
+          <tr><td><code>users</code></td><td>10-digit <code>mobile</code></td><td>Name, email, booking_ids. Unique index on non-empty mobile</td></tr>
+          <tr><td><code>bookings</code></td><td><code>booking_id</code></td><td>Hotel, room, dates, guest, status, total INR</td></tr>
+          <tr><td><code>sessions</code></td><td>cookie id</td><td>Logged-in guest until Log out</td></tr>
+          <tr><td><code>counters</code></td><td><code>booking_seq</code></td><td>Atomically increments BK numbers</td></tr>
         </tbody>
       </table>
       <p>
-        <code>create_booking</code> uses the signed-in name, email, and mobile.
-        <code>list_bookings</code> / <code>cancel_booking</code> / <code>modify_booking</code>
-        require that same mobile and email.
+        Availability is not “hope the model remembers.” Overlap is
+        <code>check_in &lt; requested_out</code> and <code>check_out &gt; requested_in</code>
+        for non-cancelled rows on that hotel+room. Inventory is a number on the
+        room document minus those overlaps.
       </p>
 
-      <h2 id="tools">16 MCP tools</h2>
-      <table>
-        <thead><tr><th>Tool</th><th>When</th><th>Needs</th></tr></thead>
-        <tbody>
-          <tr><td><code>search_hotels</code></td><td>City + dates</td><td>city, check_in, check_out, guests, rooms</td></tr>
-          <tr><td><code>search_hotels_by_location</code></td><td>Near an area</td><td>latitude, longitude, radius km</td></tr>
-          <tr><td><code>get_hotel_details</code></td><td>One property</td><td>hotel_id</td></tr>
-          <tr><td><code>get_hotel_amenities</code></td><td>Facilities</td><td>hotel_id</td></tr>
-          <tr><td><code>get_hotel_reviews</code></td><td>Guest comments</td><td>hotel_id</td></tr>
-          <tr><td><code>get_room_details</code></td><td>A room type</td><td>hotel_id, room_id</td></tr>
-          <tr><td><code>check_hotel_availability</code></td><td>Before book</td><td>hotel_id, room_id, dates, guests</td></tr>
-          <tr><td><code>get_hotel_rates</code></td><td>Rate plans</td><td>hotel_id, room_id, dates, guests</td></tr>
-          <tr><td><code>get_booking_price</code></td><td>INR total</td><td>hotel_id, room_id, dates, guests</td></tr>
-          <tr><td><code>get_cancellation_policy</code></td><td>Refund rules</td><td>hotel_id, room_id, rate_id</td></tr>
-          <tr><td><code>create_booking</code></td><td>Reserve</td><td>ids, dates, guests + signed-in name, email, mobile</td></tr>
-          <tr><td><code>get_booking</code></td><td>One stay</td><td>booking_id + signed-in email and mobile</td></tr>
-          <tr><td><code>list_bookings</code></td><td>My stays</td><td>signed-in email and mobile</td></tr>
-          <tr><td><code>get_booking_status</code></td><td>Confirmed / cancelled</td><td>booking_id + signed-in email and mobile</td></tr>
-          <tr><td><code>modify_booking</code></td><td>Change stay</td><td>booking_id + signed-in email and mobile</td></tr>
-          <tr><td><code>cancel_booking</code></td><td>Cancel</td><td>booking_id + signed-in email and mobile</td></tr>
-        </tbody>
-      </table>
-      <p>Dates are <code>YYYY-MM-DD</code>. Currency is INR. Catalog city is Pune. IDs: hotels <code>HTL-PUN-013</code>, rooms <code>HTL-PUN-013-DLX</code>, bookings <code>BK-1001</code>. Guests never see these tool names in the chat.</p>
+      <h2 id="guest">Guest identity</h2>
+      <p>
+        First visit collects name, email, 10-digit mobile. Stored in
+        <code>users</code> + <code>sessions</code>. Chat is 401 until that form is
+        saved. Log out is on the chat header only.
+      </p>
+      <pre>GET  /auth/me
+POST /auth/guest
+POST /auth/logout
+POST /chat          → 401 without a complete guest</pre>
+      <p>
+        The host injects that identity into create / list / get / modify / cancel
+        <em>after</em> Claude proposes arguments. The model cannot book as someone
+        else by stuffing another phone into the tool call. The MCP layer then
+        checks the booking’s stored mobile <strong>and</strong> email. Knowing a
+        <code>BK-…</code> id is not enough.
+      </p>
+      <p>Google OAuth was added and removed. A guest form is enough for this demo and avoids an OAuth client-secret in the host.</p>
 
-      <h2 id="env">Environment (names only)</h2>
+      <h2 id="photos">Hotel photos</h2>
+      <p>
+        Every hotel has two Unsplash HTTPS URLs in Mongo (exterior + room), not
+        binary blobs. Search/details JSON includes them. The orchestrator walks
+        tool payloads, keeps https URLs, and the UI renders a gallery. Claude is
+        told not to paste URLs into prose — CSP and layout stay under our control.
+      </p>
+      <p>
+        Asking “show me images” often produced a text-only turn (no tool call).
+        The host now treats photo intent as a first-class case: call
+        <code>get_hotel_details</code> for a hotel_id in the message or recent
+        history, or reuse the last photos from the session.
+      </p>
+
+      <h2 id="ui">Chat UI</h2>
+      <ul>
+        <li>Guest screen: dark stage + cream form. On phones the cream panel fills leftover viewport so there is no black band under the button.</li>
+        <li>Chat: header, scrollable thread, composer pinned to the bottom of the viewport (<code>100dvh</code> flex column, <code>min-height: 0</code> on the scroller).</li>
+        <li>No tool-name chips. Photos tap-open a lightbox. Static assets cache-busted with <code>?v=</code>.</li>
+      </ul>
+
+      <h2 id="security">Security layers</h2>
+      <ul>
+        <li>Secrets only in local <span class="file">.env</span> / Render env. Never in HTML, JS, or replies.</li>
+        <li>Input: NFKC, strip tags/nulls, 4k cap, jailbreak regex, topic gate (Pune/hotel) on the first turn; follow-ups allowed in-session.</li>
+        <li>Tools: frozen allowlist of 16 names, 2k arg cap, injection scan on args. MCP command path from config, not from the user.</li>
+        <li>Identity: host overwrite + MCP ownership AND(phone, email).</li>
+        <li>Output: redact <code>sk-ant-…</code>, strip tool names.</li>
+        <li>HTTP: CSP <code>script-src 'self'</code>, <code>connect-src 'self'</code>, <code>img-src 'self' data: images.unsplash.com</code>, httponly cookie, <code>COOKIE_SECURE</code> on HTTPS, 20 req/min/session.</li>
+      </ul>
+
+      <h2 id="run">Run locally</h2>
+      <ol>
+        <li><span class="file">HOTEL-CHATBOT-CLIENT/.env</span> — <code>ANTHROPIC_API_KEY</code>, model name.</li>
+        <li><span class="file">HOTEL-CHATBOT-MCP/.env</span> — <code>MONGODB_URI</code>, <code>MONGODB_DB=hotel_chatbot</code>.</li>
+        <li>Start the host (it starts MCP):</li>
+      </ol>
+      <pre>cd HOTEL-CHATBOT-CLIENT
+./.venv/bin/python app.py</pre>
+      <p>Open <a href="http://127.0.0.1:8000">http://127.0.0.1:8000</a>. No auto-reload. Ctrl+C and start again after Python changes. Atlas Network Access must allow your IP (or <code>0.0.0.0/0</code> for demos).</p>
+
+      <h2 id="deploy">Deploy on Render</h2>
+      <p>One Docker web service. MCP is a child inside the same container. Hugging Face Docker Spaces were skipped (free accounts often cannot use the Docker SDK).</p>
+      <ol>
+        <li>Push <code>main</code> to GitHub. Never commit <span class="file">.env</span>.</li>
+        <li>Atlas → Network Access → <code>0.0.0.0/0</code> (Render IPs are not static on free).</li>
+        <li>Render → New Web Service → repo → Runtime Docker → branch <code>main</code> → Free.</li>
+        <li>Env: <code>ANTHROPIC_API_KEY</code>, <code>ANTHROPIC_MODEL=claude-haiku-4-5</code>, <code>MONGODB_URI</code>, <code>MONGODB_DB=hotel_chatbot</code>, <code>COOKIE_SECURE=true</code>. Docker already sets <code>MCP_SERVER_PYTHON=/usr/local/bin/python</code> and the server script path.</li>
+        <li>Wait for <code>Hotel chat API ready</code>. URL example: <a href="https://hotel-chatbot-42t0.onrender.com/">https://hotel-chatbot-42t0.onrender.com/</a></li>
+      </ol>
+      <p>If search claims the database is down: env vars on Render, Atlas 0.0.0.0/0, and MCP child env inheritance in <span class="file">mcp_bridge.py</span>.</p>
+
+      <h2 id="limits">Honest limits (say this in the interview)</h2>
+      <ul>
+        <li>No payment, no real GDS/hotel API. Catalog is 50 seeded Pune hotels. Photos are stock Unsplash, not property-owned shots.</li>
+        <li>Rate limiter is in-process memory. One Render instance is fine; it would not share across replicas.</li>
+        <li>Chat history lives in the FastAPI process dict plus a Mongo session for the guest profile. A dyno restart drops in-memory history; identity cookie still works.</li>
+        <li>Free Render sleeps. Claude cost is yours for every public visitor.</li>
+        <li>MCP stdio is one client. This is not a multi-tenant tool gateway.</li>
+      </ul>
+      <p><strong>If I took this to production next:</strong> Streamable HTTP MCP behind auth for more than one host; SSE/token streaming for the UI; Redis rate limit + session; Postgres if we need transactions across inventory; actual hotel photos and a payment intent before <code>create_booking</code>; structured logging of tool_name + latency + token use, never of secrets.</p>
+
+      <h2 id="qa-mcp">Cross questions — MCP &amp; the agent</h2>
+
+      <div class="qa">
+        <p class="q">Q. Isn’t this just OpenAI/Anthropic function calling with extra steps?</p>
+        <p class="a"><strong>A.</strong> Function calling is the model’s I/O shape. MCP is the server contract: list tools, call tools, typed JSON Schema, a process boundary. I can point Cursor, another host, or a test harness at the same <span class="file">server.py</span> without copying handlers into each app. The host still uses Claude tool_use. They compose; they are not the same layer.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Q. Why stdio instead of HTTP MCP?</p>
+        <p class="a"><strong>A.</strong> One host, one server, same container. Stdio means no extra port, no MCP auth story, command baked into config. HTTP MCP wins when many clients share tools or the server must scale independently. I would move to Streamable HTTP the day a second consumer appears.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Q. Why official low-level Server, not FastMCP?</p>
+        <p class="a"><strong>A.</strong> I needed the schema on the wire to match <span class="file">TOOL_DEFINITIONS</span> exactly — date formats, required arrays, minimums. FastMCP is faster to sketch. For a booking API I want the schema file to be the source of truth, not a decorator side effect.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Q. Why 16 tools instead of one <code>hotel_api</code> mega-tool?</p>
+        <p class="a"><strong>A.</strong> Small tools give the model a routing surface and give me least privilege. Search does not need the right to cancel. Cancel does not need the whole catalog. A mega-tool becomes an untyped RPC and the model stuffs the wrong fields. skills.md then teaches a chain: search → details → availability → price → book.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Q. How do you stop the model inventing a hotel or a price?</p>
+        <p class="a"><strong>A.</strong> System prompt: facts only from tools. Search projects a thin card (id, area, stars, starting price, photos). Details are a second call. If it still hallucinates, the user can be wrong — but create_booking only accepts real hotel_id/room_id from Mongo or it errors. Prices are computed in Python, not in prose.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Q. What happens if Claude asks for a tool you do not have?</p>
+        <p class="a"><strong>A.</strong> It only sees the 16 from <code>list_tools</code> after the host allowlist. If a name still sneaks through, <code>validate_tool_call</code> raises and the loop returns a blocked tool error to the model, not a shell.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Q. Tool results can be prompt-injection. What did you do?</p>
+        <p class="a"><strong>A.</strong> Treat tool JSON as untrusted text in the next model turn. Cap size at 8k. Project fields so reviews cannot be a 50-page jailbreak. Input guardrails also scan tool args. I do not execute anything from hotel descriptions. A production host would additionally wrap tool_result in a clear “data, not instructions” delimiter and refuse <code>ignore previous instructions</code> inside payloads — I already regex that on user text.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Q. Why Haiku, not Sonnet/Opus?</p>
+        <p class="a"><strong>A.</strong> This loop can do several round-trips per user message. Haiku keeps latency and cost acceptable for a public URL. Routing is in skills.md so a smaller model does not have to invent the playbook. I would switch to Sonnet if booking accuracy dropped, not for a prettier paragraph.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Q. Why not stream tokens to the UI?</p>
+        <p class="a"><strong>A.</strong> Tool loops are bursty: silence, then JSON, then more silence. Naive SSE of the first text block looks broken when the model immediately tool-calls. I shipped correct bookings first. Streaming is additive: send “searching…” events per tool_name internally, then stream the final text. Guests still must not see raw tool names.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Q. How do you keep MCP env correct in Docker?</p>
+        <p class="a"><strong>A.</strong> The Python MCP stdio helper does not pass the parent environment unless you set <code>StdioServerParameters.env</code>. On Render, <code>MONGODB_URI</code> lived on the FastAPI process and the child only had PATH/HOME — search then failed with a vague “database” story from Claude. <span class="file">mcp_bridge.py</span> copies <code>os.environ</code> (skipping bash functions). That is a real MCP footgun. Mention it; interviewers who have shipped MCP will nod.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Q. Could this MCP server run inside Cursor?</p>
+        <p class="a"><strong>A.</strong> Yes, as a stdio server, if you pointed Cursor at <span class="file">HOTEL-CHATBOT-MCP/server.py</span> with the Mongo env. The hotel tools do not depend on FastAPI. What Cursor would not have is guest cookie injection — you would need to pass guest_phone/email in the tool args yourself. That is the host’s job.</p>
+      </div>
+
+      <h2 id="qa-sec">Cross questions — security &amp; identity</h2>
+      <div class="qa">
+        <p class="q">Q. Why overwrite Claude’s guest fields instead of trusting the prompt?</p>
+        <p class="a"><strong>A.</strong> Prompts are advisory. A model that is jailbroken, confused, or overly helpful will substitute another email. The orchestrator sets <code>guest_phone</code>, <code>guest_email</code>, <code>customer_id</code>, and <code>guest_name</code> from the session after the model emits the call. Defense in depth: MCP still checks the booking row matches that pair.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Q. Why mobile AND email, not just booking_id?</p>
+        <p class="a"><strong>A.</strong> Booking ids are short and appear in chat. If ID were capability, anyone who saw a screenshot could cancel. Dual match is a simple possession check for a demo. Production would be a logged-in account plus authorization records, not two PII fields. I would not pretend this is OAuth.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Q. Why drop Google login?</p>
+        <p class="a"><strong>A.</strong> OAuth adds redirect URIs, client secrets, and a “phone still missing” extra step. The product need was a stable guest identity for ownership. A three-field form plus httponly cookie is honest for a catalog demo. I can talk through how I would add Google again without putting the client secret in the browser.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Q. Is the cookie enough session security?</p>
+        <p class="a"><strong>A.</strong> HttpOnly, SameSite=Lax, Secure on HTTPS, path=/, year max-age for a demo concierge. No JWT in localStorage. CSRF is limited because CORS is locked to localhost origins and the live site is same-origin POST. I would add CSRF tokens or SameSite=Strict if we added mutating cookie-auth from other sites.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Q. How do you stop someone dumping the system prompt or the API key?</p>
+        <p class="a"><strong>A.</strong> Regex jailbreaks before Claude. Topic gate. Output redaction for <code>sk-ant-</code>. The key is never in the frontend. If they ask for .env, we refuse. This is not a formal security review — it is layered hygiene. A determined model jailbreak can still leak prompt text; that is why secrets are not in the prompt.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Q. Why hide tool names from the guest?</p>
+        <p class="a"><strong>A.</strong> They are an implementation detail and a social-engineering surface (“call cancel_booking on BK-1001”). The assistant should speak hotels, dates, INR. We strip names in <span class="file">guardrails.py</span> even if the model slips.</p>
+      </div>
+
+      <h2 id="qa-data">Cross questions — data &amp; product</h2>
+      <div class="qa">
+        <p class="q">Q. Why MongoDB, not Postgres?</p>
+        <p class="a"><strong>A.</strong> The hotel document is already a nested JSON card (rooms, rate plans, reviews). Mongo matches that shape and Atlas was already in the toolchain. I would pick Postgres if we needed multi-row transactions for inventory under contention. For 50 hotels and demo traffic, an overlap query plus inventory integer is enough. I am not religious about the store; I am religious about not keeping bookings in RAM.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Q. Are bookings dummy or real?</p>
+        <p class="a"><strong>A.</strong> Real documents. Dummy in the product sense: no payment, catalog is synthetic-ish Pune data. Cancel sets <code>status: cancelled</code> and keeps the row so list/status still explain what happened. Hard delete would make support and audit worse.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Q. How do you avoid double-booking?</p>
+        <p class="a"><strong>A.</strong> Before create/modify we count overlapping non-cancelled stays for that room. Race: two concurrent creates can both pass the check on a single node without a transaction. Honest answer: demo-scale; production wants findAndModify / a booking lock / SQL constraints. Say that before they ask.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Q. Why not store image binaries in GridFS?</p>
+        <p class="a"><strong>A.</strong> The chat UI needs a URL. Hotlinking Unsplash keeps Atlas small and the seed script trivial. Cost: stock photos, CSP allowlist, dependency on their CDN. Next step is objects in S3/R2 under <code>/static</code> or our own bucket, still URLs in Mongo, never blobs in the chat JSON.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Q. Why did “show me images” fail at first?</p>
+        <p class="a"><strong>A.</strong> Photos were in Mongo and in tool JSON, but the UI only attached <code>images[]</code> for the turn that actually called a hotel tool. “Show me photos” was often a no-tool text reply, so the gallery was empty. I fixed it in the host: photo intent loads details or reuses session photos. That is a product bug in the agent loop, not a missing seed.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Q. Why HTTP POST chat, not Socket.IO?</p>
+        <p class="a"><strong>A.</strong> A booking turn is a long request with a single final answer. Websockets add reconnect, sticky sessions, and a second protocol for no extra UX. POST plus a pending “One moment…” row is enough. I would add SSE when we stream.</p>
+      </div>
+
+      <h2 id="qa-ops">Cross questions — ops, UI, tradeoffs</h2>
+      <div class="qa">
+        <p class="q">Q. Why one Docker image, not two services?</p>
+        <p class="a"><strong>A.</strong> Stdio MCP must be a child of the host. Two Render services would force HTTP MCP and a private network. One image matches the architecture: host owns the server lifecycle. Split later if the tool process needs different scaling or language.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Q. What broke on Render besides Mongo env?</p>
+        <p class="a"><strong>A.</strong> FastAPI StaticFiles mount 404’d in that environment, so <span class="file">app.py</span> serves <code>/static/{filename}</code> explicitly. Python path for the child must be <code>/usr/local/bin/python</code>, not a Mac venv. First hit after sleep is Render’s router with no replica — “Not Found” with <code>x-render-routing: no-server</code> — wait and retry.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Q. Why pin the composer to the bottom?</p>
+        <p class="a"><strong>A.</strong> <code>height: 100%</code> does not resolve against <code>min-height</code> on html/body, so the flex thread never filled the viewport and the input sat under the header. Fix: <code>100dvh</code> column, thread <code>flex: 1; min-height: 0; overflow: auto</code>, composer <code>flex-shrink: 0</code>. Classic mobile chat layout. Same class of bug as the black gap on the guest form after we removed copy.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Q. How would you test this without clicking the UI?</p>
+        <p class="a"><strong>A.</strong> Unit-test tools against a test DB: overlap math, ownership refusal, projection fields. Contract-test MCP <code>list_tools</code> names vs the host allowlist so they cannot drift. Mock Anthropic for the loop (tool_use then final text). A thin eval set: “book X”, “cancel someone else’s BK”, “weather in London”. I would not claim we have that harness fully built — that is the next engineering pass.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Q. What is the hardest MCP lesson in this repo?</p>
+        <p class="a"><strong>A.</strong> The model is not the application. If a rule matters (who may cancel, which env the child sees, whether photos render), implement it in the host or the tool server. Prompts route. Code authorizes. MCP is useful because it makes that boundary visible: a process that can only list and call tools, and a host that decides when those calls happen and with whose identity.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Q. If you had two more weeks?</p>
+        <p class="a"><strong>A.</strong> Stream the final answer; eval suite for ownership and Pune-only; structured traces; real photo assets; optional HTTP MCP for Cursor; and a booking confirmation that is idempotent under double-click. I would not add a vector store. Fifty hotels do not need RAG. They need correct tools.</p>
+      </div>
+
+      <h2 id="env">Environment names only</h2>
       <table>
         <thead><tr><th>Where</th><th>Variables</th></tr></thead>
         <tbody>
           <tr>
-            <td><span class="file">HOTEL-CHATBOT-CLIENT/.env</span> (local)</td>
+            <td><span class="file">HOTEL-CHATBOT-CLIENT/.env</span></td>
             <td><code>ANTHROPIC_API_KEY</code>, <code>ANTHROPIC_MODEL</code>, optional MCP python / script / cwd</td>
           </tr>
           <tr>
-            <td><span class="file">HOTEL-CHATBOT-MCP/.env</span> (local)</td>
+            <td><span class="file">HOTEL-CHATBOT-MCP/.env</span></td>
             <td><code>MONGODB_URI</code>, <code>MONGODB_DB</code></td>
           </tr>
           <tr>
-            <td>Render Environment</td>
-            <td><code>ANTHROPIC_API_KEY</code>, <code>ANTHROPIC_MODEL</code>, <code>MONGODB_URI</code>, <code>MONGODB_DB</code>, <code>COOKIE_SECURE=true</code></td>
+            <td>Render</td>
+            <td>same secrets + <code>COOKIE_SECURE=true</code>. MCP paths come from the Dockerfile.</td>
           </tr>
         </tbody>
       </table>
-      <p>Copy from each folder’s <span class="file">.env.example</span>. Those files are gitignored for real secrets.</p>
-
-      <h2 id="security">Guardrails</h2>
-      <ul>
-        <li>Browser never sees the Claude key or Mongo URI.</li>
-        <li>Jailbreaks and secret-shaped text are refused before Claude.</li>
-        <li>Only the 16 hotel tools may be called.</li>
-        <li>A guest can only change bookings that match their mobile and email.</li>
-        <li>20 requests per minute per session cookie.</li>
-        <li>CSP: scripts from <code>'self'</code> only; <code>connect-src 'self'</code>.</li>
-        <li>Chat replies do not list internal tool names.</li>
-      </ul>
+      <div class="callout">Never paste keys into the chat UI, this HTML, GitHub, or a slide. Point at the variable names only.</div>
 
       <footer>
-        Workspace: Hotel-ChatBot · Live: Render Docker web service<br />
-        Updated 21 Aug 2026 — guest ownership, Render deploy, MongoDB catalog.
+        Workspace Hotel-ChatBot · Live Render Docker · GitHub shelarrohit45/Hotel-ChatBot<br />
+        Updated 21 Aug 2026 — interviewer brief: MCP host/server, ownership, photos, Q&amp;A.
       </footer>
     </main>
   </div>
