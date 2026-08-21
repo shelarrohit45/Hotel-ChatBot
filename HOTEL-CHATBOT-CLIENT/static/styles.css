@@ -26,7 +26,7 @@ html, body {
   clip: rect(0, 0, 0, 0);
 }
 
-body.locked .desk { visibility: hidden; }
+body.locked .desk { display: none; }
 
 .desk {
   display: flex;
@@ -231,14 +231,6 @@ button[type="submit"]:disabled { opacity: 0.35; cursor: default; }
   letter-spacing: -0.02em;
 }
 
-.signin-copy {
-  margin: 28px 0 0;
-  max-width: 28em;
-  font-size: 18px;
-  line-height: 1.5;
-  color: #cbbba8;
-}
-
 .signin-panel {
   background: var(--paper);
   padding: 72px 56px;
@@ -261,6 +253,8 @@ button[type="submit"]:disabled { opacity: 0.35; cursor: default; }
   font-size: 32px;
   font-weight: 500;
 }
+
+.gate-error:empty { display: none; }
 
 .gate-error {
   min-height: 1.3em;
