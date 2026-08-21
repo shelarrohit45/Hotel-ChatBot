@@ -77,11 +77,13 @@ class HotelOrchestrator:
                 "text": blocked,
                 "history": history,
                 "tools_called": [],
+                "images": [],
                 "blocked": True,
             }
 
         messages = _trim_history(history) + [{"role": "user", "content": cleaned}]
         tools_called: list[str] = []
+        photos: list[dict[str, str]] = []
         client = self._client_or_raise()
         retried_fresh = False
         system = _system_with_guest(self.system_prompt, guest)
@@ -112,6 +114,7 @@ class HotelOrchestrator:
                     "text": redact_output(text),
                     "history": _trim_history(messages),
                     "tools_called": tools_called,
+                    "images": photos,
                     "blocked": False,
                 }
 
@@ -126,6 +129,7 @@ class HotelOrchestrator:
                 except Exception as exc:
                     logger.warning("tool %s failed: %s", name, type(exc).__name__)
                     payload = {"error": "Tool call was blocked or failed."}
+                _collect_hotel_photos(payload, photos)
                 results.append(
                     {
                         "type": "tool_result",
@@ -139,8 +143,39 @@ class HotelOrchestrator:
             "text": "I could not finish that booking request. Please try a shorter question.",
             "history": _trim_history(messages),
             "tools_called": tools_called,
+            "images": photos,
             "blocked": False,
         }
+
+
+def _collect_hotel_photos(payload: Any, photos: list[dict[str, str]], limit: int = 8) -> None:
+    if len(photos) >= limit:
+        return
+    if isinstance(payload, list):
+        for item in payload:
+            _collect_hotel_photos(item, photos, limit)
+        return
+    if not isinstance(payload, dict):
+        return
+    caption = str(payload.get("name") or payload.get("hotel_name") or "").strip()
+    urls: list[str] = []
+    hero = payload.get("image_url")
+    if isinstance(hero, str):
+        urls.append(hero)
+    extra = payload.get("images")
+    if isinstance(extra, list):
+        urls.extend(str(item) for item in extra if isinstance(item, str))
+    seen = {item["url"] for item in photos}
+    for url in urls:
+        if len(photos) >= limit:
+            return
+        if not url.startswith("https://") or url in seen:
+            continue
+        photos.append({"url": url, "caption": caption})
+        seen.add(url)
+    for value in payload.values():
+        if isinstance(value, (dict, list)):
+            _collect_hotel_photos(value, photos, limit)
 
 
 def _blocks_to_dicts(content: Any) -> list[dict[str, Any]]:

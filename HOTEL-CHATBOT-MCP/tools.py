@@ -36,6 +36,7 @@ FIELD_MAPPINGS = {
         "starting_price_inr",
         "latitude",
         "longitude",
+        "image_url",
     ],
     "hotel_details": [
         "hotel_id",
@@ -54,6 +55,8 @@ FIELD_MAPPINGS = {
         "check_out_time",
         "policies",
         "rooms",
+        "image_url",
+        "images",
     ],
     "rooms": [
         "room_id",

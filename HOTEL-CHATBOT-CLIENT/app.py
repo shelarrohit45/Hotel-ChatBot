@@ -246,6 +246,7 @@ async def chat(payload: ChatIn, request: Request):
         {
             "text": result["text"],
             "blocked": result["blocked"],
+            "images": result.get("images") or [],
         }
     )
     _set_session_cookie(body, session_id)

@@ -260,7 +260,7 @@ def security_headers() -> Dict[str, str]:
             "default-src 'self'; "
             "script-src 'self'; "
             "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data:; "
+            "img-src 'self' data: https://images.unsplash.com; "
             "connect-src 'self'; "
             "frame-ancestors 'none'; "
             "base-uri 'self'"

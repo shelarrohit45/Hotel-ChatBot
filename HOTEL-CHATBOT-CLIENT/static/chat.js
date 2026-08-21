@@ -11,7 +11,7 @@ const logoutBtn = document.getElementById("logout");
 
 let ready = false;
 
-function addMessage(role, text) {
+function addMessage(role, text, images) {
   const wrap = document.createElement("article");
   wrap.className = "msg " + role;
   const who = document.createElement("span");
@@ -21,6 +21,25 @@ function addMessage(role, text) {
   body.textContent = text;
   wrap.appendChild(who);
   wrap.appendChild(body);
+  if (images && images.length) {
+    const gallery = document.createElement("div");
+    gallery.className = "photos";
+    images.forEach((item) => {
+      const figure = document.createElement("figure");
+      const img = document.createElement("img");
+      img.src = item.url;
+      img.alt = item.caption || "Hotel";
+      img.loading = "lazy";
+      figure.appendChild(img);
+      if (item.caption) {
+        const cap = document.createElement("figcaption");
+        cap.textContent = item.caption;
+        figure.appendChild(cap);
+      }
+      gallery.appendChild(figure);
+    });
+    wrap.appendChild(gallery);
+  }
   thread.appendChild(wrap);
   thread.scrollTop = thread.scrollHeight;
   return wrap;
@@ -90,7 +109,7 @@ async function sendMessage(text) {
       addMessage("assistant", data.error || "The desk is unavailable right now.");
       return;
     }
-    addMessage("assistant", data.text || "No reply.");
+    addMessage("assistant", data.text || "No reply.", data.images || []);
   } catch (err) {
     pending.remove();
     addMessage("assistant", "Could not reach the desk.");
