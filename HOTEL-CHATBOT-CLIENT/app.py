@@ -181,6 +181,7 @@ async def auth_guest(payload: GuestIn, request: Request):
         return body
     bag["user"] = public_user(stored)
     bag["history"] = []
+    bag["images"] = []
     save_login_session(session_id, bag["user"])
     body = JSONResponse({"user": bag["user"]})
     _set_session_cookie(body, session_id)
@@ -225,7 +226,12 @@ async def chat(payload: ChatIn, request: Request):
         return body
 
     try:
-        result = await orchestrator.reply(payload.message, bag.get("history") or [], guest=guest)
+        result = await orchestrator.reply(
+            payload.message,
+            bag.get("history") or [],
+            guest=guest,
+            cached_images=bag.get("images") or [],
+        )
     except RuntimeError as exc:
         logger.warning("chat unavailable: %s", type(exc).__name__)
         body = JSONResponse({"error": redact_output(str(exc))}, status_code=503)
@@ -242,6 +248,8 @@ async def chat(payload: ChatIn, request: Request):
         return body
 
     bag["history"] = result["history"]
+    if result.get("images"):
+        bag["images"] = result["images"]
     body = JSONResponse(
         {
             "text": result["text"],

@@ -23,6 +23,7 @@ function addMessage(role, text, images) {
   who.className = "who";
   who.textContent = role === "user" ? "You" : "Desk";
   const body = document.createElement("div");
+  body.className = "copy";
   body.textContent = text;
   wrap.appendChild(who);
   wrap.appendChild(body);
@@ -30,21 +31,24 @@ function addMessage(role, text, images) {
     const gallery = document.createElement("div");
     gallery.className = "photos";
     images.forEach((item) => {
+      const url = typeof item === "string" ? item : item && item.url;
+      if (!url) return;
+      const caption = (item && item.caption) || "Hotel";
       const figure = document.createElement("figure");
       const img = document.createElement("img");
-      img.src = item.url;
-      img.alt = item.caption || "Hotel";
+      img.src = url;
+      img.alt = caption;
       img.loading = "lazy";
-      img.addEventListener("click", () => openLightbox(item.url, item.caption || "Hotel"));
+      img.addEventListener("click", () => openLightbox(url, caption));
       figure.appendChild(img);
-      if (item.caption) {
+      if (caption && caption !== "Hotel") {
         const cap = document.createElement("figcaption");
-        cap.textContent = item.caption;
+        cap.textContent = caption;
         figure.appendChild(cap);
       }
       gallery.appendChild(figure);
     });
-    wrap.appendChild(gallery);
+    if (gallery.childElementCount) wrap.appendChild(gallery);
   }
   thread.appendChild(wrap);
   const pane = conversation || thread;

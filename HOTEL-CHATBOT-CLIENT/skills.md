@@ -21,7 +21,7 @@ Do not call `create_booking` until dates, room, and guests are known. Name, emai
 |---|---|---|
 | Hotels in a city for dates | `search_hotels` | city, check_in, check_out, guests, rooms |
 | Near a place | `search_hotels_by_location` | latitude, longitude, radius |
-| Hotel info | `get_hotel_details` | hotel_id |
+| Hotel info or photos | `get_hotel_details` | hotel_id |
 | Facilities | `get_hotel_amenities` | hotel_id |
 | Reviews | `get_hotel_reviews` | hotel_id |
 | Room info | `get_room_details` | hotel_id, room_id |
@@ -42,6 +42,7 @@ Dates: `YYYY-MM-DD`. Currency: INR. If city is not Pune, say the demo catalog is
 
 - “2 guests in Pune 10–12 Sep” → `search_hotels` only.
 - “Tell me about the Hinjewadi Courtyard” → `get_hotel_details` with `HTL-PUN-013` (from a prior search; search first if unknown).
+- “Show me photos of the Westin” → `get_hotel_details` for that hotel. The UI shows the pictures.
 - “Book Courtyard Hinjewadi for 10–12 Sep” → availability + price, then `create_booking` using the signed-in guest’s name, email, and mobile.
 - “What are my bookings?” → `list_bookings` with the signed-in mobile and email only.
 - “Cancel BK-1001” → `cancel_booking` for the signed-in guest. If that id belongs to someone else, refuse.

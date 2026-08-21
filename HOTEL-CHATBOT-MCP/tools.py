@@ -37,6 +37,7 @@ FIELD_MAPPINGS = {
         "latitude",
         "longitude",
         "image_url",
+        "images",
     ],
     "hotel_details": [
         "hotel_id",
@@ -120,7 +121,7 @@ TOOL_DEFINITIONS: List[Dict] = [
     },
     {
         "name": "get_hotel_details",
-        "description": "Get complete information about a specific hotel including address, description, amenities, check-in/out times, policies, and a summary of room types. Use after search_hotels when the guest has picked a hotel_id.",
+        "description": "Get complete information about a specific hotel including address, description, amenities, photos, check-in/out times, policies, and a summary of room types. Use after search_hotels when the guest has picked a hotel_id, and whenever they ask to see pictures or images of a hotel.",
         "input_schema": {
             "type": "object",
             "properties": {

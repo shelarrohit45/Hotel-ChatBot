@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -22,6 +23,12 @@ logger = logging.getLogger(__name__)
 MAX_TOOL_ROUNDS = 8
 MAX_HISTORY_MESSAGES = 24
 MAX_TOOL_RESULT_CHARS = 8000
+MAX_PHOTOS = 8
+_PHOTO_ASK = re.compile(
+    r"\b(photos?|pictures?|images?|pics?|gallery|looks?\s+like)\b",
+    re.I,
+)
+_HOTEL_ID = re.compile(r"HTL-PUN-\d{3}", re.I)
 
 
 def load_system_prompt(root: Path = CLIENT_ROOT) -> str:
@@ -69,6 +76,7 @@ class HotelOrchestrator:
         user_text: str,
         history: Optional[list[dict[str, Any]]] = None,
         guest: Optional[dict[str, Any]] = None,
+        cached_images: Optional[list[dict[str, str]]] = None,
     ) -> dict[str, Any]:
         history = list(history or [])
         cleaned, blocked = inspect_user_message(user_text, in_session=bool(history))
@@ -110,6 +118,7 @@ class HotelOrchestrator:
             tool_uses = [b for b in assistant_blocks if b.get("type") == "tool_use"]
             if not tool_uses:
                 text = _text_from_blocks(assistant_blocks)
+                photos = await self._photos_for_reply(cleaned, messages, photos, cached_images)
                 return {
                     "text": redact_output(text),
                     "history": _trim_history(messages),
@@ -139,6 +148,7 @@ class HotelOrchestrator:
                 )
             messages.append({"role": "user", "content": results})
 
+        photos = await self._photos_for_reply(cleaned, messages, photos, cached_images)
         return {
             "text": "I could not finish that booking request. Please try a shorter question.",
             "history": _trim_history(messages),
@@ -147,8 +157,60 @@ class HotelOrchestrator:
             "blocked": False,
         }
 
+    async def _photos_for_reply(
+        self,
+        user_text: str,
+        messages: list[dict[str, Any]],
+        photos: list[dict[str, str]],
+        cached_images: Optional[list[dict[str, str]]],
+    ) -> list[dict[str, str]]:
+        wants_photos = bool(_PHOTO_ASK.search(user_text or ""))
+        ids = _hotel_ids_from(user_text) or _hotel_ids_from_history(messages)
+        if wants_photos and ids:
+            focused: list[dict[str, str]] = []
+            for hotel_id in ids[:2]:
+                try:
+                    payload = await self.bridge.call_tool("get_hotel_details", {"hotel_id": hotel_id})
+                except Exception as exc:
+                    logger.warning("photo lookup %s failed: %s", hotel_id, type(exc).__name__)
+                    continue
+                _collect_hotel_photos(payload, focused, limit=4)
+            if focused:
+                return focused
+        if photos:
+            return photos[:MAX_PHOTOS]
+        if wants_photos and cached_images:
+            return list(cached_images)[:MAX_PHOTOS]
+        return photos
 
-def _collect_hotel_photos(payload: Any, photos: list[dict[str, str]], limit: int = 8) -> None:
+
+def _hotel_ids_from(text: str) -> list[str]:
+    found = [match.group(0).upper() for match in _HOTEL_ID.finditer(text or "")]
+    return list(dict.fromkeys(found))
+
+
+def _hotel_ids_from_history(messages: list[dict[str, Any]]) -> list[str]:
+    ids: list[str] = []
+    for message in reversed(messages[-12:]):
+        content = message.get("content")
+        if isinstance(content, str):
+            blob = content
+        else:
+            try:
+                blob = json.dumps(content, ensure_ascii=False)
+            except TypeError:
+                blob = str(content)
+        ids.extend(_hotel_ids_from(blob))
+        if ids:
+            break
+    return list(dict.fromkeys(ids))
+
+
+def _ok_photo_url(url: str) -> bool:
+    return url.startswith("https://") or url.startswith("/static/")
+
+
+def _collect_hotel_photos(payload: Any, photos: list[dict[str, str]], limit: int = MAX_PHOTOS) -> None:
     if len(photos) >= limit:
         return
     if isinstance(payload, list):
@@ -169,7 +231,7 @@ def _collect_hotel_photos(payload: Any, photos: list[dict[str, str]], limit: int
     for url in urls:
         if len(photos) >= limit:
             return
-        if not url.startswith("https://") or url in seen:
+        if not _ok_photo_url(url) or url in seen:
             continue
         photos.append({"url": url, "caption": caption})
         seen.add(url)
