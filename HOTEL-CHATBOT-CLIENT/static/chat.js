@@ -1,4 +1,5 @@
 const thread = document.getElementById("thread");
+const conversation = document.querySelector(".conversation");
 const form = document.getElementById("chat-form");
 const input = document.getElementById("message");
 const send = document.getElementById("send");
@@ -46,7 +47,8 @@ function addMessage(role, text, images) {
     wrap.appendChild(gallery);
   }
   thread.appendChild(wrap);
-  thread.scrollTop = thread.scrollHeight;
+  const pane = conversation || thread;
+  pane.scrollTop = pane.scrollHeight;
   return wrap;
 }
 

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>The Desk</title>
-  <link rel="stylesheet" href="/static/styles.css?v=4" />
+  <link rel="stylesheet" href="/static/styles.css?v=5" />
 </head>
 <body class="locked">
   <div id="gate" class="gate">
@@ -38,8 +38,10 @@
         <button type="button" id="logout">Log out</button>
       </div>
     </header>
-    <section id="thread" class="thread" aria-live="polite"></section>
-    <p id="blank" class="blank">Ask about a stay in Pune.</p>
+    <div class="conversation">
+      <p id="blank" class="blank">Ask about a stay in Pune.</p>
+      <section id="thread" class="thread" aria-live="polite"></section>
+    </div>
     <form id="chat-form" class="composer">
       <label class="sr-only" for="message">Message</label>
       <textarea id="message" name="message" maxlength="4000" rows="1" placeholder="Write a message"></textarea>
@@ -51,6 +53,6 @@
     <img id="lightbox-image" alt="" />
     <p id="lightbox-caption"></p>
   </div>
-  <script src="/static/chat.js?v=3"></script>
+  <script src="/static/chat.js?v=4"></script>
 </body>
 </html>
