@@ -8,6 +8,10 @@ const guestForm = document.getElementById("guest-form");
 const account = document.getElementById("account");
 const accountName = document.getElementById("account-name");
 const logoutBtn = document.getElementById("logout");
+const lightbox = document.getElementById("lightbox");
+const lightboxImage = document.getElementById("lightbox-image");
+const lightboxCaption = document.getElementById("lightbox-caption");
+const lightboxClose = document.getElementById("lightbox-close");
 
 let ready = false;
 
@@ -30,6 +34,7 @@ function addMessage(role, text, images) {
       img.src = item.url;
       img.alt = item.caption || "Hotel";
       img.loading = "lazy";
+      img.addEventListener("click", () => openLightbox(item.url, item.caption || "Hotel"));
       figure.appendChild(img);
       if (item.caption) {
         const cap = document.createElement("figcaption");
@@ -159,6 +164,28 @@ logoutBtn.addEventListener("click", async () => {
   thread.replaceChildren();
   guestForm.reset();
   showGate();
+});
+
+function openLightbox(url, caption) {
+  if (!lightbox || !lightboxImage) return;
+  lightboxImage.src = url;
+  lightboxImage.alt = caption || "Hotel";
+  lightboxCaption.textContent = caption || "";
+  lightbox.hidden = false;
+}
+
+function closeLightbox() {
+  if (!lightbox) return;
+  lightbox.hidden = true;
+  lightboxImage.src = "";
+}
+
+lightboxClose.addEventListener("click", closeLightbox);
+lightbox.addEventListener("click", (event) => {
+  if (event.target === lightbox) closeLightbox();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && lightbox && !lightbox.hidden) closeLightbox();
 });
 
 setBusy(true);

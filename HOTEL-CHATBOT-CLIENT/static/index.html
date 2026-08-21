@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>The Desk</title>
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
@@ -47,6 +47,11 @@
       <textarea id="message" name="message" maxlength="4000" rows="1" placeholder="Write a message"></textarea>
       <button type="submit" id="send">Send</button>
     </form>
+  </div>
+  <div id="lightbox" class="lightbox" hidden>
+    <button type="button" id="lightbox-close" class="lightbox-close">Close</button>
+    <img id="lightbox-image" alt="" />
+    <p id="lightbox-caption"></p>
   </div>
   <script src="/static/chat.js"></script>
 </body>

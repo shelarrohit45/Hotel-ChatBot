@@ -11,7 +11,8 @@
 
 html, body {
   margin: 0;
-  height: 100%;
+  min-height: 100%;
+  min-height: 100dvh;
   background: var(--paper);
   color: var(--ink);
   font-family: "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, serif;
@@ -135,6 +136,7 @@ body.locked .desk { visibility: hidden; }
   object-fit: cover;
   border-radius: 10px;
   background: #e8e0d4;
+  cursor: pointer;
 }
 
 .photos figcaption {
@@ -190,12 +192,15 @@ button[type="submit"]:disabled { opacity: 0.35; cursor: default; }
   inset: 0;
   z-index: 30;
   background: var(--ink);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .signin {
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
   min-height: 100%;
+  min-height: 100dvh;
 }
 
 .signin-stage {
@@ -299,10 +304,61 @@ button[type="submit"]:disabled { opacity: 0.35; cursor: default; }
   cursor: pointer;
 }
 
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(14, 13, 11, 0.94);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 56px 16px 24px;
+  gap: 12px;
+}
+
+.lightbox[hidden] { display: none; }
+
+.lightbox img {
+  max-width: 100%;
+  max-height: calc(100dvh - 120px);
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.lightbox p {
+  margin: 0;
+  color: #cbbba8;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+  text-align: center;
+}
+
+.lightbox-close {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  right: 16px;
+  border: 0;
+  background: none;
+  color: #f3eadc;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
 @media (max-width: 860px) {
   .signin { grid-template-columns: 1fr; }
-  .signin-stage { padding: 40px 28px 32px; min-height: 38vh; }
-  .signin-stage h1 { font-size: 40px; }
-  .signin-panel { padding: 36px 28px 48px; }
+  .signin-stage { padding: 28px 20px 16px; min-height: 0; }
+  .signin-stage h1 { font-size: 32px; }
+  .signin-copy { margin-top: 16px; font-size: 16px; }
+  .signin-panel {
+    padding: 24px 20px calc(32px + env(safe-area-inset-bottom, 0px));
+    justify-content: flex-start;
+  }
+  .signin-panel h2 { font-size: 26px; margin-bottom: 20px; }
+  .guest-form button { margin-bottom: 8px; }
   .desk { max-width: none; padding: 0 16px; }
+  .photos { grid-template-columns: 1fr 1fr; }
 }
