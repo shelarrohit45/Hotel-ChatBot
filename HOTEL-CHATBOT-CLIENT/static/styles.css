@@ -336,26 +336,31 @@ button[type="submit"]:disabled { opacity: 0.35; cursor: default; }
 }
 
 @media (max-width: 860px) {
+  .gate { background: var(--paper); }
   .signin {
-    display: block;
-    overflow-y: scroll;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
     touch-action: pan-y;
+    background: var(--paper);
   }
   .signin-stage {
-    padding: 20px 20px 12px;
+    flex: 0 0 auto;
+    padding: 20px 20px 16px;
     min-height: 0;
     justify-content: flex-start;
   }
   .signin-stage h1 { font-size: 28px; }
   .signin-panel {
-    padding: 20px 20px calc(96px + env(safe-area-inset-bottom, 0px));
+    flex: 1 0 auto;
+    padding: 20px 20px calc(24px + env(safe-area-inset-bottom, 0px));
     justify-content: flex-start;
   }
   .signin-panel h2 { font-size: 24px; margin-bottom: 16px; }
-  .guest-form { padding-bottom: 12px; }
-  .guest-form button { margin-bottom: 16px; }
+  .guest-form { padding-bottom: 0; }
+  .guest-form button { margin-bottom: 0; }
   .desk { max-width: none; padding: 0 16px; }
   .photos { grid-template-columns: 1fr 1fr; }
 }
