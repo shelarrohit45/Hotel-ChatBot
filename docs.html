@@ -96,7 +96,8 @@
     <nav>
       <div class="sec">Overview</div>
       <a href="#what">What this is</a>
-      <a href="#run">How to run</a>
+      <a href="#run">How to run locally</a>
+      <a href="#deploy">Deploy on Render</a>
       <a href="#guest">Guest profile</a>
       <a href="#flow">Request flow</a>
       <div class="sec">Code</div>
@@ -115,22 +116,96 @@
       </p>
       <p>
         Dummy bookings are real database records, not memory. A guest can
-        look up stays by <strong>10-digit mobile number</strong> if they forget
-        <code>BK-…</code>. There is no payment gateway.
+        only view, change, or cancel stays booked with <strong>their own
+        email and 10-digit mobile</strong>. There is no payment gateway.
+        Chat is ordinary HTTP <code>POST /chat</code> (not Socket.IO).
       </p>
 
-      <h2 id="run">How to run</h2>
+      <h2 id="run">How to run locally</h2>
       <ol>
         <li>Confirm <span class="file">HOTEL-CHATBOT-CLIENT/.env</span> has <code>ANTHROPIC_API_KEY</code>.</li>
         <li>Confirm <span class="file">HOTEL-CHATBOT-MCP/.env</span> has <code>MONGODB_URI</code> and <code>MONGODB_DB=hotel_chatbot</code>.</li>
         <li>Start the client (it also starts the MCP server as a child process):</li>
       </ol>
-      <pre>cd /Users/rohitshelar/Desktop/Hotel-ChatBot/HOTEL-CHATBOT-CLIENT
+      <pre>cd HOTEL-CHATBOT-CLIENT
 ./.venv/bin/python app.py</pre>
       <p>Open <a href="http://127.0.0.1:8000">http://127.0.0.1:8000</a>. Stop with Ctrl+C, then start again after Python changes (no auto-reload).</p>
       <div class="callout">
         Never paste the Claude key or MongoDB password into the chat UI, this HTML, or frontend JS.
       </div>
+
+      <h2 id="deploy">Deploy on Render (step by step)</h2>
+      <p>
+        Deploy <strong>one</strong> web service. The MCP hotel tools run as a child
+        process inside the same Docker image. Hugging Face Docker Spaces are
+        paid for many free accounts, so this project uses Render.
+      </p>
+      <p>Public GitHub repo: <a href="https://github.com/shelarrohit45/Hotel-ChatBot">github.com/shelarrohit45/Hotel-ChatBot</a></p>
+
+      <h3>1. Push the code to GitHub</h3>
+      <p>Do not commit <span class="file">.env</span> files. From the project root:</p>
+      <pre>git add -A
+git status    # confirm no .env files
+git commit -m "Deploy hotel chatbot"
+git push origin main</pre>
+
+      <h3>2. Allow MongoDB Atlas from the internet</h3>
+      <ol>
+        <li>Open <a href="https://cloud.mongodb.com">cloud.mongodb.com</a> and sign in.</li>
+        <li><strong>Network Access</strong> → <strong>Add IP Address</strong>.</li>
+        <li>Click <strong>Allow Access from Anywhere</strong> (<code>0.0.0.0/0</code>) → Confirm.</li>
+      </ol>
+      <p>Without this, Render cannot reach the hotel catalog.</p>
+
+      <h3>3. Create a Render web service</h3>
+      <ol>
+        <li>Open <a href="https://dashboard.render.com">dashboard.render.com</a> and sign in with GitHub.</li>
+        <li><strong>New</strong> → <strong>Web Service</strong>.</li>
+        <li>Connect the repo <code>shelarrohit45/Hotel-ChatBot</code> (or your fork).</li>
+        <li>Set:
+          <ul>
+            <li><strong>Runtime:</strong> Docker (uses the repo-root <span class="file">Dockerfile</span>)</li>
+            <li><strong>Branch:</strong> <code>main</code></li>
+            <li><strong>Instance type:</strong> Free</li>
+          </ul>
+        </li>
+      </ol>
+
+      <h3>4. Add environment variables</h3>
+      <p>In the Render service → <strong>Environment</strong>. Copy values from your local <span class="file">.env</span> files. Do not put them in GitHub.</p>
+      <table>
+        <thead><tr><th>Name</th><th>Value</th><th>Where it comes from</th></tr></thead>
+        <tbody>
+          <tr><td><code>ANTHROPIC_API_KEY</code></td><td>your Claude key</td><td><span class="file">HOTEL-CHATBOT-CLIENT/.env</span> (secret)</td></tr>
+          <tr><td><code>ANTHROPIC_MODEL</code></td><td><code>claude-haiku-4-5</code></td><td>same as local, or the model you use</td></tr>
+          <tr><td><code>MONGODB_URI</code></td><td>Atlas connection string</td><td><span class="file">HOTEL-CHATBOT-MCP/.env</span> (secret)</td></tr>
+          <tr><td><code>MONGODB_DB</code></td><td><code>hotel_chatbot</code></td><td>database name</td></tr>
+          <tr><td><code>COOKIE_SECURE</code></td><td><code>true</code></td><td>required on HTTPS</td></tr>
+        </tbody>
+      </table>
+      <p>Docker already sets MCP paths inside the image. You do not need the Mac <code>MCP_SERVER_*</code> paths on Render.</p>
+
+      <h3>5. Deploy and open the URL</h3>
+      <ol>
+        <li>Click <strong>Create Web Service</strong> (or <strong>Manual Deploy</strong> after a git push).</li>
+        <li>Wait until logs show <code>Hotel chat API ready</code> and Uvicorn listening.</li>
+        <li>Open the URL Render gives you, for example:<br />
+          <a href="https://hotel-chatbot-42t0.onrender.com/">https://hotel-chatbot-42t0.onrender.com/</a></li>
+      </ol>
+
+      <h3>What to expect on the free plan</h3>
+      <ul>
+        <li>The service <strong>sleeps</strong> after idle. The first visit can show a plain “Not Found” for about a minute. Wait, then refresh.</li>
+        <li>Anyone who uses the live chat spends <strong>your</strong> Claude credits.</li>
+        <li>After each <code>git push origin main</code>, Render rebuilds if auto-deploy is on.</li>
+      </ul>
+
+      <h3>If search says the database is down</h3>
+      <ol>
+        <li>Confirm <code>MONGODB_URI</code> and <code>MONGODB_DB</code> are set on Render (not only on your Mac).</li>
+        <li>Confirm Atlas Network Access includes <code>0.0.0.0/0</code>.</li>
+        <li>The MCP child process must inherit those env vars (handled in <span class="file">CLIENT/mcp_bridge.py</span>).</li>
+      </ol>
 
       <h2 id="guest">Guest profile</h2>
       <p>
@@ -142,10 +217,15 @@
 POST /auth/guest    → save name, email, mobile
 POST /auth/logout   → clear session
 POST /chat          → 401 until the guest form is saved</pre>
+      <p>
+        Cancel, modify, and “my bookings” only work for reservations that match
+        this guest’s mobile <strong>and</strong> email. Another person who knows a
+        <code>BK-…</code> id cannot change it.
+      </p>
       <h3>Try in chat</h3>
       <pre>Find hotels in Pune for 2 guests from 10 to 12 Sep 2026
 Book Courtyard Hinjewadi
-I forgot my booking id
+What are my bookings?
 Cancel BK-1001</pre>
 
       <h2 id="flow">How a question travels</h2>
@@ -155,15 +235,17 @@ Cancel BK-1001</pre>
   → Claude       (system = CLAUDE.md + skills.md)
       if tool_use:
         → allowlist (16 names)
+        → inject signed-in guest into book / list / cancel / modify
         → MCP stdio  HOTEL-CHATBOT-MCP/server.py
         → tools.py   → MongoDB hotel_chatbot
-  → JSON { text, tools_called, blocked }
-  → chat UI</pre>
+  → JSON { text, blocked }
+  → chat UI  (tool names are never shown)</pre>
 
       <h2 id="tree">Folders</h2>
       <pre>Hotel-ChatBot/
 ├── docs.html                      ← this document
-├── .cursor/mcp.json               ← Cursor can also launch the MCP server
+├── Dockerfile                     ← client + MCP in one image (Render)
+├── README.md                      ← Hugging Face / Docker metadata
 ├── HOTEL-CHATBOT-MCP/
 │   ├── server.py                  ← MCP stdio (list_tools / call_tool)
 │   ├── tools.py                   ← 16 tool definitions + handlers
@@ -175,7 +257,7 @@ Cancel BK-1001</pre>
     ├── app.py                     ← FastAPI GET /  POST /chat
     ├── config.py
     ├── guardrails.py
-    ├── mcp_bridge.py
+    ├── mcp_bridge.py              ← spawns MCP; passes env (Mongo URI)
     ├── orchestrator.py            ← Claude + tool loop
     ├── CLAUDE.md                  ← system scope
     ├── skills.md                  ← when to call which tool
@@ -187,19 +269,20 @@ Cancel BK-1001</pre>
       <table>
         <thead><tr><th>File</th><th>Role</th></tr></thead>
         <tbody>
+          <tr><td><span class="file">Dockerfile</span></td><td>One image: FastAPI chat + MCP child process.</td></tr>
           <tr><td><span class="file">MCP/server.py</span></td><td>Official MCP Server over stdio. No business logic.</td></tr>
-          <tr><td><span class="file">MCP/tools.py</span></td><td>Tool schemas and handlers. Search, book, cancel.</td></tr>
+          <tr><td><span class="file">MCP/tools.py</span></td><td>Tool schemas and handlers. Search, book, cancel. Ownership checks.</td></tr>
           <tr><td><span class="file">MCP/db.py</span></td><td>Mongo connection, indexes, hotel/booking/user queries.</td></tr>
-          <tr><td><span class="file">CLIENT/app.py</span></td><td>HTTP API. Cookie session. Serves static UI.</td></tr>
-          <tr><td><span class="file">CLIENT/orchestrator.py</span></td><td>Claude Messages API + up to 8 tool rounds.</td></tr>
-          <tr><td><span class="file">CLIENT/mcp_bridge.py</span></td><td>Spawns MCP python + server.py, call_tool JSON.</td></tr>
-          <tr><td><span class="file">CLIENT/guardrails.py</span></td><td>Sanitize, jailbreak, Pune/hotel topic, tool allowlist, CSP.</td></tr>
+          <tr><td><span class="file">CLIENT/app.py</span></td><td>HTTP API. Cookie session. Serves HTML, CSS, JS.</td></tr>
+          <tr><td><span class="file">CLIENT/orchestrator.py</span></td><td>Claude Messages API + up to 8 tool rounds. Fills guest identity.</td></tr>
+          <tr><td><span class="file">CLIENT/mcp_bridge.py</span></td><td>Spawns MCP python + server.py. Forwards process env to the child.</td></tr>
+          <tr><td><span class="file">CLIENT/guardrails.py</span></td><td>Sanitize, jailbreak, Pune/hotel topic, tool allowlist, CSP. Strips tool names from replies.</td></tr>
           <tr><td><span class="file">CLIENT/user_store.py</span></td><td>Saves guest name, email, mobile in MongoDB.</td></tr>
         </tbody>
       </table>
 
       <h2 id="mongo">MongoDB</h2>
-      <p>Database name: <code>hotel_chatbot</code>. URI lives only in <span class="file">HOTEL-CHATBOT-MCP/.env</span>.</p>
+      <p>Database name: <code>hotel_chatbot</code>. URI lives in <span class="file">HOTEL-CHATBOT-MCP/.env</span> locally, and in Render environment variables in production.</p>
       <table>
         <thead><tr><th>Collection</th><th>Key</th><th>Contents</th></tr></thead>
         <tbody>
@@ -211,8 +294,9 @@ Cancel BK-1001</pre>
         </tbody>
       </table>
       <p>
-        <code>create_booking</code> requires name, email, and mobile.
-        <code>list_bookings</code> with <code>guest_phone</code> is how “I forgot my booking id” works.
+        <code>create_booking</code> uses the signed-in name, email, and mobile.
+        <code>list_bookings</code> / <code>cancel_booking</code> / <code>modify_booking</code>
+        require that same mobile and email.
       </p>
 
       <h2 id="tools">16 MCP tools</h2>
@@ -229,27 +313,31 @@ Cancel BK-1001</pre>
           <tr><td><code>get_hotel_rates</code></td><td>Rate plans</td><td>hotel_id, room_id, dates, guests</td></tr>
           <tr><td><code>get_booking_price</code></td><td>INR total</td><td>hotel_id, room_id, dates, guests</td></tr>
           <tr><td><code>get_cancellation_policy</code></td><td>Refund rules</td><td>hotel_id, room_id, rate_id</td></tr>
-          <tr><td><code>create_booking</code></td><td>Reserve</td><td>ids, dates, guests, name, email, <strong>guest_phone</strong></td></tr>
-          <tr><td><code>get_booking</code></td><td>One stay</td><td>booking_id</td></tr>
-          <tr><td><code>list_bookings</code></td><td>Forgot id</td><td>guest_phone or email</td></tr>
-          <tr><td><code>get_booking_status</code></td><td>Confirmed / cancelled</td><td>booking_id</td></tr>
-          <tr><td><code>modify_booking</code></td><td>Change stay</td><td>booking_id</td></tr>
-          <tr><td><code>cancel_booking</code></td><td>Cancel</td><td>booking_id</td></tr>
+          <tr><td><code>create_booking</code></td><td>Reserve</td><td>ids, dates, guests + signed-in name, email, mobile</td></tr>
+          <tr><td><code>get_booking</code></td><td>One stay</td><td>booking_id + signed-in email and mobile</td></tr>
+          <tr><td><code>list_bookings</code></td><td>My stays</td><td>signed-in email and mobile</td></tr>
+          <tr><td><code>get_booking_status</code></td><td>Confirmed / cancelled</td><td>booking_id + signed-in email and mobile</td></tr>
+          <tr><td><code>modify_booking</code></td><td>Change stay</td><td>booking_id + signed-in email and mobile</td></tr>
+          <tr><td><code>cancel_booking</code></td><td>Cancel</td><td>booking_id + signed-in email and mobile</td></tr>
         </tbody>
       </table>
-      <p>Dates are <code>YYYY-MM-DD</code>. Currency is INR. Catalog city is Pune. IDs: hotels <code>HTL-PUN-013</code>, rooms <code>HTL-PUN-013-DLX</code>, bookings <code>BK-1001</code>.</p>
+      <p>Dates are <code>YYYY-MM-DD</code>. Currency is INR. Catalog city is Pune. IDs: hotels <code>HTL-PUN-013</code>, rooms <code>HTL-PUN-013-DLX</code>, bookings <code>BK-1001</code>. Guests never see these tool names in the chat.</p>
 
       <h2 id="env">Environment (names only)</h2>
       <table>
-        <thead><tr><th>File</th><th>Variables</th></tr></thead>
+        <thead><tr><th>Where</th><th>Variables</th></tr></thead>
         <tbody>
           <tr>
-            <td><span class="file">HOTEL-CHATBOT-CLIENT/.env</span></td>
-            <td><code>ANTHROPIC_API_KEY</code>, <code>ANTHROPIC_MODEL</code>, MCP python / script / cwd paths</td>
+            <td><span class="file">HOTEL-CHATBOT-CLIENT/.env</span> (local)</td>
+            <td><code>ANTHROPIC_API_KEY</code>, <code>ANTHROPIC_MODEL</code>, optional MCP python / script / cwd</td>
           </tr>
           <tr>
-            <td><span class="file">HOTEL-CHATBOT-MCP/.env</span></td>
+            <td><span class="file">HOTEL-CHATBOT-MCP/.env</span> (local)</td>
             <td><code>MONGODB_URI</code>, <code>MONGODB_DB</code></td>
+          </tr>
+          <tr>
+            <td>Render Environment</td>
+            <td><code>ANTHROPIC_API_KEY</code>, <code>ANTHROPIC_MODEL</code>, <code>MONGODB_URI</code>, <code>MONGODB_DB</code>, <code>COOKIE_SECURE=true</code></td>
           </tr>
         </tbody>
       </table>
@@ -260,13 +348,15 @@ Cancel BK-1001</pre>
         <li>Browser never sees the Claude key or Mongo URI.</li>
         <li>Jailbreaks and secret-shaped text are refused before Claude.</li>
         <li>Only the 16 hotel tools may be called.</li>
+        <li>A guest can only change bookings that match their mobile and email.</li>
         <li>20 requests per minute per session cookie.</li>
         <li>CSP: scripts from <code>'self'</code> only; <code>connect-src 'self'</code>.</li>
+        <li>Chat replies do not list internal tool names.</li>
       </ul>
 
       <footer>
-        Workspace: /Users/rohitshelar/Desktop/Hotel-ChatBot<br />
-        Updated 21 Aug 2026 — MongoDB catalog, no local hotel JSON.
+        Workspace: Hotel-ChatBot · Live: Render Docker web service<br />
+        Updated 21 Aug 2026 — guest ownership, Render deploy, MongoDB catalog.
       </footer>
     </main>
   </div>
