@@ -349,7 +349,6 @@ button[type="submit"]:disabled { opacity: 0.35; cursor: default; }
     justify-content: flex-start;
   }
   .signin-stage h1 { font-size: 28px; }
-  .signin-copy { margin-top: 12px; font-size: 15px; }
   .signin-panel {
     padding: 20px 20px calc(96px + env(safe-area-inset-bottom, 0px));
     justify-content: flex-start;
