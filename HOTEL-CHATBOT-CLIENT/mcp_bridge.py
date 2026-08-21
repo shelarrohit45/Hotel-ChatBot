@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Any, Optional
 
 from mcp import ClientSession, StdioServerParameters
@@ -17,6 +18,16 @@ from config import Settings, get_settings
 from guardrails import ALLOWED_TOOLS, validate_tool_call
 
 logger = logging.getLogger(__name__)
+
+# MCP stdio only inherits HOME/PATH/etc unless env is set. Render keeps
+# MONGODB_URI on the parent process, so the hotel tools never saw it.
+def _child_env() -> dict[str, str]:
+    env: dict[str, str] = {}
+    for key, value in os.environ.items():
+        if not isinstance(value, str) or value.startswith("()"):
+            continue
+        env[key] = value
+    return env
 
 
 class McpBridge:
@@ -40,6 +51,7 @@ class McpBridge:
             command=str(self._settings.mcp_server_python),
             args=[str(self._settings.mcp_server_script)],
             cwd=str(self._settings.mcp_server_cwd),
+            env=_child_env(),
         )
         self._stdio_cm = stdio_client(params)
         read, write = await self._stdio_cm.__aenter__()
