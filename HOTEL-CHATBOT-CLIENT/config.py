@@ -4,6 +4,7 @@ Do not log ANTHROPIC_API_KEY. The browser never reads this module.
 MCP child process paths are fixed in env — never taken from user input.
 """
 
+import shutil
 import sys
 from functools import lru_cache
 from pathlib import Path
@@ -40,7 +41,19 @@ class Settings(BaseSettings):
         alias="MCP_SERVER_CWD",
     )
 
-    @field_validator("mcp_server_python", "mcp_server_script", "mcp_server_cwd", mode="before")
+    @field_validator("mcp_server_python", mode="before")
+    @classmethod
+    def _expand_python(cls, value: str) -> Path:
+        raw = str(value).strip()
+        path = Path(raw).expanduser()
+        if path.is_absolute():
+            return path
+        found = shutil.which(raw)
+        if found:
+            return Path(found)
+        return (CLIENT_ROOT / path).absolute()
+
+    @field_validator("mcp_server_script", "mcp_server_cwd", mode="before")
     @classmethod
     def _expand_path(cls, value: str) -> Path:
         path = Path(str(value)).expanduser()
