@@ -1,0 +1,333 @@
+"""MongoDB access for the hotel catalog, bookings, and users.
+
+Connection string comes from HOTEL-CHATBOT-MCP/.env — never from chat input.
+Collections: hotels, bookings, users, counters.
+Hotel records are read from MongoDB only.
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+import re
+from datetime import datetime, timezone
+from functools import lru_cache
+from pathlib import Path
+from typing import Any, Optional
+
+from dotenv import load_dotenv
+from pymongo import ASCENDING, MongoClient, ReturnDocument
+from pymongo.collection import Collection
+from pymongo.database import Database
+
+logger = logging.getLogger(__name__)
+
+MCP_ROOT = Path(__file__).resolve().parent
+
+load_dotenv(MCP_ROOT / ".env")
+
+PHONE_RE = re.compile(r"\d+")
+
+
+def normalize_phone(value: Optional[str]) -> str:
+    """Keep the last 10 digits so +91 / 0 prefixes still match."""
+    digits = "".join(PHONE_RE.findall(value or ""))
+    if len(digits) >= 10:
+        return digits[-10:]
+    return digits
+
+
+def looks_like_phone(value: Optional[str]) -> bool:
+    digits = normalize_phone(value)
+    return len(digits) == 10
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _clean(doc: Optional[dict]) -> Optional[dict]:
+    if not doc:
+        return None
+    out = dict(doc)
+    out.pop("_id", None)
+    return out
+
+
+@lru_cache(maxsize=1)
+def get_client() -> MongoClient:
+    uri = (os.getenv("MONGODB_URI") or "").strip()
+    if not uri:
+        raise RuntimeError(
+            "MONGODB_URI is missing. Add it to HOTEL-CHATBOT-MCP/.env"
+        )
+    client = MongoClient(uri, serverSelectionTimeoutMS=15000)
+    client.admin.command("ping")
+    return client
+
+
+def get_db() -> Database:
+    name = (os.getenv("MONGODB_DB") or "hotel_chatbot").strip()
+    return get_client()[name]
+
+
+def hotels_col() -> Collection:
+    return get_db()["hotels"]
+
+
+def bookings_col() -> Collection:
+    return get_db()["bookings"]
+
+
+def users_col() -> Collection:
+    return get_db()["users"]
+
+
+def counters_col() -> Collection:
+    return get_db()["counters"]
+
+
+def sessions_col() -> Collection:
+    return get_db()["sessions"]
+
+
+def ensure_indexes() -> None:
+    hotels_col().create_index("hotel_id", unique=True)
+    hotels_col().create_index("city")
+    bookings_col().create_index("booking_id", unique=True)
+    bookings_col().create_index("guest_phone")
+    bookings_col().create_index("customer_id")
+    bookings_col().create_index(
+        [("hotel_id", ASCENDING), ("room_id", ASCENDING), ("status", ASCENDING)]
+    )
+    users_col().create_index("email")
+    try:
+        users_col().drop_index("mobile_1")
+    except Exception:
+        pass
+    # Atlas partial indexes cannot use $regex. $gt:"" = non-empty string only.
+    users_col().create_index(
+        "mobile",
+        unique=True,
+        name="mobile_unique_nonempty",
+        partialFilterExpression={"mobile": {"$gt": ""}},
+    )
+
+
+_initialized = False
+
+
+def init_db() -> None:
+    global _initialized
+    if _initialized:
+        return
+    ensure_indexes()
+    count = hotels_col().count_documents({})
+    if count == 0:
+        raise RuntimeError(
+            "MongoDB hotels collection is empty. Expected documents in hotel_chatbot.hotels."
+        )
+    logger.info("MongoDB hotels collection has %s documents", count)
+    _initialized = True
+
+
+def list_hotels() -> list[dict]:
+    return [_clean(doc) for doc in hotels_col().find({})]
+
+
+def hotels_by_city(city: str) -> list[dict]:
+    return [
+        _clean(doc)
+        for doc in hotels_col().find({"city": {"$regex": f"^{re.escape(city)}$", "$options": "i"}})
+    ]
+
+
+def find_hotel(hotel_id: str) -> Optional[dict]:
+    return _clean(hotels_col().find_one({"hotel_id": hotel_id}))
+
+
+def next_booking_id() -> str:
+    counters_col().update_one(
+        {"_id": "booking_seq"},
+        {"$setOnInsert": {"seq": 1000}},
+        upsert=True,
+    )
+    doc = counters_col().find_one_and_update(
+        {"_id": "booking_seq"},
+        {"$inc": {"seq": 1}},
+        return_document=ReturnDocument.AFTER,
+    )
+    return f"BK-{doc['seq']}"
+
+
+def insert_booking(booking: dict) -> dict:
+    doc = dict(booking)
+    doc["_id"] = booking["booking_id"]
+    bookings_col().insert_one(doc)
+    return _clean(doc)
+
+
+def get_booking(booking_id: str) -> Optional[dict]:
+    return _clean(bookings_col().find_one({"booking_id": booking_id}))
+
+
+def save_booking(booking: dict) -> dict:
+    booking_id = booking["booking_id"]
+    doc = dict(booking)
+    doc["_id"] = booking_id
+    bookings_col().replace_one({"_id": booking_id}, doc, upsert=True)
+    return _clean(doc)
+
+
+def list_bookings_for(customer_id: str = "", guest_phone: str = "") -> list[dict]:
+    phone = normalize_phone(guest_phone or (customer_id if looks_like_phone(customer_id) else ""))
+    email = ""
+    if customer_id and not looks_like_phone(customer_id):
+        email = customer_id.strip().lower()
+
+    if phone and email:
+        query: dict[str, Any] = {
+            "guest_phone": phone,
+            "$or": [
+                {"customer_id": email},
+                {"guest_email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}},
+            ],
+        }
+    elif phone:
+        query = {"guest_phone": phone}
+    elif email:
+        query = {
+            "$or": [
+                {"customer_id": email},
+                {"guest_email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}},
+            ]
+        }
+    else:
+        return []
+
+    return [_clean(doc) for doc in bookings_col().find(query).sort("created_at", ASCENDING)]
+
+
+def overlapping_count(
+    hotel_id: str,
+    room_id: str,
+    check_in: str,
+    check_out: str,
+    skip_booking_id: Optional[str] = None,
+) -> int:
+    query: dict[str, Any] = {
+        "hotel_id": hotel_id,
+        "room_id": room_id,
+        "status": {"$ne": "cancelled"},
+        "check_in": {"$lt": check_out},
+        "check_out": {"$gt": check_in},
+    }
+    if skip_booking_id:
+        query["booking_id"] = {"$ne": skip_booking_id}
+    return bookings_col().count_documents(query)
+
+
+def upsert_user(name: str, email: str, phone: str, booking_id: str) -> dict:
+    mobile = normalize_phone(phone)
+    if not mobile:
+        raise ValueError("Mobile number is required")
+    now = _now()
+    email_n = (email or "").strip().lower()
+    existing = users_col().find_one({"mobile": mobile}) or (
+        users_col().find_one({"email": email_n}) if email_n else None
+    )
+    if existing:
+        users_col().update_one(
+            {"_id": existing["_id"]},
+            {
+                "$set": {
+                    "name": name or existing.get("name"),
+                    "email": email_n or existing.get("email"),
+                    "mobile": mobile,
+                    "updated_at": now,
+                },
+                "$addToSet": {"booking_ids": booking_id},
+            },
+        )
+        return _clean(users_col().find_one({"_id": existing["_id"]}))
+    users_col().update_one(
+        {"mobile": mobile},
+        {
+            "$set": {
+                "name": name,
+                "email": email_n,
+                "mobile": mobile,
+                "updated_at": now,
+            },
+            "$setOnInsert": {"created_at": now, "_id": mobile},
+            "$addToSet": {"booking_ids": booking_id},
+        },
+        upsert=True,
+    )
+    return _clean(users_col().find_one({"mobile": mobile}))
+
+
+def public_user(doc: Optional[dict]) -> Optional[dict]:
+    if not doc:
+        return None
+    phone = normalize_phone(doc.get("mobile") or doc.get("phone"))
+    return {
+        "name": doc.get("name") or "",
+        "email": doc.get("email") or "",
+        "phone": phone,
+    }
+
+
+def upsert_guest(name: str, email: str, phone: str) -> dict:
+    """Create or refresh a guest profile from the first-visit form."""
+    name_n = (name or "").strip()
+    email_n = (email or "").strip().lower()
+    mobile = normalize_phone(phone)
+    if len(name_n) < 2:
+        raise ValueError("Enter your full name")
+    if "@" not in email_n or "." not in email_n.split("@")[-1]:
+        raise ValueError("Enter a valid email")
+    if len(mobile) != 10:
+        raise ValueError("Enter a 10-digit mobile number")
+    now = _now()
+    existing = users_col().find_one({"mobile": mobile}) or users_col().find_one({"email": email_n})
+    fields = {
+        "name": name_n,
+        "email": email_n,
+        "mobile": mobile,
+        "updated_at": now,
+    }
+    if existing:
+        users_col().update_one({"_id": existing["_id"]}, {"$set": fields})
+        return _clean(users_col().find_one({"_id": existing["_id"]}))
+    users_col().insert_one(
+        {
+            "_id": mobile,
+            "name": name_n,
+            "email": email_n,
+            "mobile": mobile,
+            "booking_ids": [],
+            "created_at": now,
+            "updated_at": now,
+        }
+    )
+    return _clean(users_col().find_one({"mobile": mobile}))
+
+
+def load_login_session(session_id: str) -> Optional[dict]:
+    if not session_id:
+        return None
+    return _clean(sessions_col().find_one({"_id": session_id}))
+
+
+def save_login_session(session_id: str, user: dict) -> None:
+    sessions_col().replace_one(
+        {"_id": session_id},
+        {"_id": session_id, "user": user, "updated_at": _now()},
+        upsert=True,
+    )
+
+
+def delete_login_session(session_id: str) -> None:
+    if session_id:
+        sessions_col().delete_one({"_id": session_id})

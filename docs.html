@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hotel ChatBot — project document</title>
+  <style>
+    :root {
+      --ink: #161410;
+      --paper: #f3efe6;
+      --card: #fbf8f2;
+      --line: #d8d0c4;
+      --muted: #6b6258;
+      --copper: #9a4f24;
+      --code: #121821;
+      --code-fg: #e7edf5;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: "Iowan Old Style", Palatino, Georgia, serif;
+      background: var(--paper);
+      color: var(--ink);
+      line-height: 1.55;
+    }
+    .top {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: var(--ink);
+      color: #f4efe6;
+      padding: 14px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 16px;
+    }
+    .top h1 { margin: 0; font-size: 20px; font-weight: 600; }
+    .top span { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #c4b6a4; }
+    .layout { display: grid; grid-template-columns: 220px 1fr; max-width: 1100px; margin: 0 auto; }
+    nav {
+      position: sticky;
+      top: 56px;
+      align-self: start;
+      padding: 28px 20px 40px 28px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: 13px;
+    }
+    nav a { display: block; color: var(--muted); text-decoration: none; padding: 5px 0; }
+    nav a:hover { color: var(--copper); }
+    nav .sec { margin-top: 16px; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: #9a9086; }
+    main { padding: 32px 28px 72px 12px; }
+    h2 { font-size: 26px; margin: 36px 0 12px; font-weight: 600; }
+    h2:first-child { margin-top: 0; }
+    h3 { font-size: 18px; margin: 22px 0 8px; }
+    p, li { font-size: 16px; }
+    .lede { font-size: 18px; color: var(--muted); max-width: 46em; }
+    .file, code {
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 0.88em;
+      background: #ece6da;
+      padding: 1px 5px;
+    }
+    pre {
+      background: var(--code);
+      color: var(--code-fg);
+      padding: 16px 18px;
+      overflow: auto;
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 15px; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+    .callout {
+      border-left: 3px solid var(--copper);
+      padding: 10px 14px;
+      background: #f7f1e8;
+      margin: 16px 0;
+    }
+    footer { margin-top: 48px; color: var(--muted); font-size: 14px; }
+    @media (max-width: 800px) {
+      .layout { grid-template-columns: 1fr; }
+      nav { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <h1>Hotel ChatBot</h1>
+    <span>Pune catalog · MCP · Claude · MongoDB</span>
+  </div>
+  <div class="layout">
+    <nav>
+      <div class="sec">Overview</div>
+      <a href="#what">What this is</a>
+      <a href="#run">How to run</a>
+      <a href="#guest">Guest profile</a>
+      <a href="#flow">Request flow</a>
+      <div class="sec">Code</div>
+      <a href="#tree">Folders</a>
+      <a href="#mongo">MongoDB</a>
+      <a href="#tools">16 tools</a>
+      <a href="#env">Environment</a>
+      <a href="#security">Security</a>
+    </nav>
+    <main>
+      <h2 id="what">What this is</h2>
+      <p class="lede">
+        A Pune hotel concierge chat. The browser talks to a FastAPI client.
+        The client talks to Claude. Claude calls 16 MCP tools. Those tools
+        read and write MongoDB — hotels, bookings, and users.
+      </p>
+      <p>
+        Dummy bookings are real database records, not memory. A guest can
+        look up stays by <strong>10-digit mobile number</strong> if they forget
+        <code>BK-…</code>. There is no payment gateway.
+      </p>
+
+      <h2 id="run">How to run</h2>
+      <ol>
+        <li>Confirm <span class="file">HOTEL-CHATBOT-CLIENT/.env</span> has <code>ANTHROPIC_API_KEY</code>.</li>
+        <li>Confirm <span class="file">HOTEL-CHATBOT-MCP/.env</span> has <code>MONGODB_URI</code> and <code>MONGODB_DB=hotel_chatbot</code>.</li>
+        <li>Start the client (it also starts the MCP server as a child process):</li>
+      </ol>
+      <pre>cd /Users/rohitshelar/Desktop/Hotel-ChatBot/HOTEL-CHATBOT-CLIENT
+./.venv/bin/python app.py</pre>
+      <p>Open <a href="http://127.0.0.1:8000">http://127.0.0.1:8000</a>. Stop with Ctrl+C, then start again after Python changes (no auto-reload).</p>
+      <div class="callout">
+        Never paste the Claude key or MongoDB password into the chat UI, this HTML, or frontend JS.
+      </div>
+
+      <h2 id="guest">Guest profile</h2>
+      <p>
+        First visit asks for <strong>name, email, and 10-digit mobile</strong>. That profile is
+        stored in MongoDB <code>users</code> and kept in the session cookie until
+        <strong>Log out</strong>. Bookings reuse those details — the chat does not ask again.
+      </p>
+      <pre>GET  /auth/me       → { user }
+POST /auth/guest    → save name, email, mobile
+POST /auth/logout   → clear session
+POST /chat          → 401 until the guest form is saved</pre>
+      <h3>Try in chat</h3>
+      <pre>Find hotels in Pune for 2 guests from 10 to 12 Sep 2026
+Book Courtyard Hinjewadi
+I forgot my booking id
+Cancel BK-1001</pre>
+
+      <h2 id="flow">How a question travels</h2>
+      <pre>Browser  The Desk UI
+  → POST /chat   (httponly cookie hotel_sid, no API key)
+  → guardrails   (jailbreak, topic, rate limit 20/min)
+  → Claude       (system = CLAUDE.md + skills.md)
+      if tool_use:
+        → allowlist (16 names)
+        → MCP stdio  HOTEL-CHATBOT-MCP/server.py
+        → tools.py   → MongoDB hotel_chatbot
+  → JSON { text, tools_called, blocked }
+  → chat UI</pre>
+
+      <h2 id="tree">Folders</h2>
+      <pre>Hotel-ChatBot/
+├── docs.html                      ← this document
+├── .cursor/mcp.json               ← Cursor can also launch the MCP server
+├── HOTEL-CHATBOT-MCP/
+│   ├── server.py                  ← MCP stdio (list_tools / call_tool)
+│   ├── tools.py                   ← 16 tool definitions + handlers
+│   ├── db.py                      ← MongoDB hotels / bookings / users
+│   ├── requirements.txt
+│   ├── .env                       ← MONGODB_URI (not committed)
+│   └── .venv/
+└── HOTEL-CHATBOT-CLIENT/
+    ├── app.py                     ← FastAPI GET /  POST /chat
+    ├── config.py
+    ├── guardrails.py
+    ├── mcp_bridge.py
+    ├── orchestrator.py            ← Claude + tool loop
+    ├── CLAUDE.md                  ← system scope
+    ├── skills.md                  ← when to call which tool
+    ├── static/                    ← The Desk UI
+    ├── .env                       ← ANTHROPIC_API_KEY (not committed)
+    └── .venv/</pre>
+
+      <h3>What each file does</h3>
+      <table>
+        <thead><tr><th>File</th><th>Role</th></tr></thead>
+        <tbody>
+          <tr><td><span class="file">MCP/server.py</span></td><td>Official MCP Server over stdio. No business logic.</td></tr>
+          <tr><td><span class="file">MCP/tools.py</span></td><td>Tool schemas and handlers. Search, book, cancel.</td></tr>
+          <tr><td><span class="file">MCP/db.py</span></td><td>Mongo connection, indexes, hotel/booking/user queries.</td></tr>
+          <tr><td><span class="file">CLIENT/app.py</span></td><td>HTTP API. Cookie session. Serves static UI.</td></tr>
+          <tr><td><span class="file">CLIENT/orchestrator.py</span></td><td>Claude Messages API + up to 8 tool rounds.</td></tr>
+          <tr><td><span class="file">CLIENT/mcp_bridge.py</span></td><td>Spawns MCP python + server.py, call_tool JSON.</td></tr>
+          <tr><td><span class="file">CLIENT/guardrails.py</span></td><td>Sanitize, jailbreak, Pune/hotel topic, tool allowlist, CSP.</td></tr>
+          <tr><td><span class="file">CLIENT/user_store.py</span></td><td>Saves guest name, email, mobile in MongoDB.</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="mongo">MongoDB</h2>
+      <p>Database name: <code>hotel_chatbot</code>. URI lives only in <span class="file">HOTEL-CHATBOT-MCP/.env</span>.</p>
+      <table>
+        <thead><tr><th>Collection</th><th>Key</th><th>Contents</th></tr></thead>
+        <tbody>
+          <tr><td><code>hotels</code></td><td><code>hotel_id</code> e.g. HTL-PUN-013</td><td>50 Pune hotels, rooms, rates, reviews, amenities.</td></tr>
+          <tr><td><code>users</code></td><td>10-digit <code>mobile</code></td><td>Name, email, booking_ids.</td></tr>
+          <tr><td><code>bookings</code></td><td><code>booking_id</code> e.g. BK-1001</td><td>Hotel, room, dates, guest, status, total INR. Cancel sets status to cancelled; the row stays.</td></tr>
+          <tr><td><code>sessions</code></td><td>cookie id</td><td>Logged-in guest until Log out.</td></tr>
+          <tr><td><code>counters</code></td><td><code>booking_seq</code></td><td>Next booking number.</td></tr>
+        </tbody>
+      </table>
+      <p>
+        <code>create_booking</code> requires name, email, and mobile.
+        <code>list_bookings</code> with <code>guest_phone</code> is how “I forgot my booking id” works.
+      </p>
+
+      <h2 id="tools">16 MCP tools</h2>
+      <table>
+        <thead><tr><th>Tool</th><th>When</th><th>Needs</th></tr></thead>
+        <tbody>
+          <tr><td><code>search_hotels</code></td><td>City + dates</td><td>city, check_in, check_out, guests, rooms</td></tr>
+          <tr><td><code>search_hotels_by_location</code></td><td>Near an area</td><td>latitude, longitude, radius km</td></tr>
+          <tr><td><code>get_hotel_details</code></td><td>One property</td><td>hotel_id</td></tr>
+          <tr><td><code>get_hotel_amenities</code></td><td>Facilities</td><td>hotel_id</td></tr>
+          <tr><td><code>get_hotel_reviews</code></td><td>Guest comments</td><td>hotel_id</td></tr>
+          <tr><td><code>get_room_details</code></td><td>A room type</td><td>hotel_id, room_id</td></tr>
+          <tr><td><code>check_hotel_availability</code></td><td>Before book</td><td>hotel_id, room_id, dates, guests</td></tr>
+          <tr><td><code>get_hotel_rates</code></td><td>Rate plans</td><td>hotel_id, room_id, dates, guests</td></tr>
+          <tr><td><code>get_booking_price</code></td><td>INR total</td><td>hotel_id, room_id, dates, guests</td></tr>
+          <tr><td><code>get_cancellation_policy</code></td><td>Refund rules</td><td>hotel_id, room_id, rate_id</td></tr>
+          <tr><td><code>create_booking</code></td><td>Reserve</td><td>ids, dates, guests, name, email, <strong>guest_phone</strong></td></tr>
+          <tr><td><code>get_booking</code></td><td>One stay</td><td>booking_id</td></tr>
+          <tr><td><code>list_bookings</code></td><td>Forgot id</td><td>guest_phone or email</td></tr>
+          <tr><td><code>get_booking_status</code></td><td>Confirmed / cancelled</td><td>booking_id</td></tr>
+          <tr><td><code>modify_booking</code></td><td>Change stay</td><td>booking_id</td></tr>
+          <tr><td><code>cancel_booking</code></td><td>Cancel</td><td>booking_id</td></tr>
+        </tbody>
+      </table>
+      <p>Dates are <code>YYYY-MM-DD</code>. Currency is INR. Catalog city is Pune. IDs: hotels <code>HTL-PUN-013</code>, rooms <code>HTL-PUN-013-DLX</code>, bookings <code>BK-1001</code>.</p>
+
+      <h2 id="env">Environment (names only)</h2>
+      <table>
+        <thead><tr><th>File</th><th>Variables</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="file">HOTEL-CHATBOT-CLIENT/.env</span></td>
+            <td><code>ANTHROPIC_API_KEY</code>, <code>ANTHROPIC_MODEL</code>, MCP python / script / cwd paths</td>
+          </tr>
+          <tr>
+            <td><span class="file">HOTEL-CHATBOT-MCP/.env</span></td>
+            <td><code>MONGODB_URI</code>, <code>MONGODB_DB</code></td>
+          </tr>
+        </tbody>
+      </table>
+      <p>Copy from each folder’s <span class="file">.env.example</span>. Those files are gitignored for real secrets.</p>
+
+      <h2 id="security">Guardrails</h2>
+      <ul>
+        <li>Browser never sees the Claude key or Mongo URI.</li>
+        <li>Jailbreaks and secret-shaped text are refused before Claude.</li>
+        <li>Only the 16 hotel tools may be called.</li>
+        <li>20 requests per minute per session cookie.</li>
+        <li>CSP: scripts from <code>'self'</code> only; <code>connect-src 'self'</code>.</li>
+      </ul>
+
+      <footer>
+        Workspace: /Users/rohitshelar/Desktop/Hotel-ChatBot<br />
+        Updated 21 Aug 2026 — MongoDB catalog, no local hotel JSON.
+      </footer>
+    </main>
+  </div>
+</body>
+</html>

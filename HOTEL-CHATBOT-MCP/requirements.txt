@@ -1,0 +1,7 @@
+# Official Model Context Protocol Python SDK.
+# Bound below 2.x. Requires Python 3.10+.
+# Install: python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
+mcp>=1.28.0,<2
+pymongo>=4.10.0
+dnspython>=2.7.0
+python-dotenv>=1.0.0
