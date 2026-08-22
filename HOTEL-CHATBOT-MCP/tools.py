@@ -13,7 +13,7 @@ Structure matches the reference tools.py:
 
 import logging
 import math
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 import db as catalog_db
@@ -88,6 +88,11 @@ FIELD_MAPPINGS = {
         "status",
         "total_inr",
         "currency",
+        "razorpay_order_id",
+        "razorpay_payment_id",
+        "paid_at",
+        "payment",
+        "receipt",
     ],
     "reviews": [
         "review_id",
@@ -111,7 +116,7 @@ TOOL_DEFINITIONS: List[Dict] = [
             "type": "object",
             "properties": {
                 "city": {"type": "string", "description": "City where the user wants to stay."},
-                "check_in": {"type": "string", "format": "date", "description": "Check-in date in YYYY-MM-DD format."},
+                "check_in": {"type": "string", "format": "date", "description": "Check-in date in YYYY-MM-DD. Must be today or a future date. Never a past date."},
                 "check_out": {"type": "string", "format": "date", "description": "Check-out date in YYYY-MM-DD format."},
                 "guests": {"type": "integer", "minimum": 1, "description": "Number of guests."},
                 "rooms": {"type": "integer", "minimum": 1, "description": "Number of rooms required."},
@@ -174,7 +179,7 @@ TOOL_DEFINITIONS: List[Dict] = [
     },
     {
         "name": "create_booking",
-        "description": "Create a hotel reservation after availability and price are confirmed. Stores the booking and guest (by mobile) in MongoDB. Returns booking_id, customer_id, status, and total payable. Requires name, email, and mobile number.",
+        "description": "Create a hotel reservation after availability and price are confirmed. Stores a pending_payment booking in MongoDB. The guest must complete Razorpay checkout in the UI before the stay is confirmed. Do not tell them the stay is confirmed until they pay. Returns booking_id, status pending_payment, and total payable.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -395,6 +400,13 @@ def _load_owned_booking(tool_input: Dict) -> tuple[Optional[Dict], Optional[Dict
     return booking, None
 
 
+IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def _today() -> date:
+    return datetime.now(IST).date()
+
+
 def _parse_date(value: str) -> Optional[date]:
     try:
         return datetime.strptime(value, "%Y-%m-%d").date()
@@ -407,8 +419,23 @@ def _validate_stay(check_in: str, check_out: str) -> Dict:
     end = _parse_date(check_out)
     if not start or not end:
         return {"error": "Dates must be YYYY-MM-DD"}
+    today = _today()
+    if start < today:
+        return {
+            "error": (
+                f"Check-in cannot be in the past. Today is {today.isoformat()}. "
+                "Please choose today or a later date."
+            )
+        }
     if end <= start:
         return {"error": "check_out must be after check_in"}
+    if end <= today:
+        return {
+            "error": (
+                f"Check-out cannot be in the past. Today is {today.isoformat()}. "
+                "Please choose a future check-out date."
+            )
+        }
     nights = (end - start).days
     return {"check_in": start, "check_out": end, "nights": nights}
 
@@ -759,10 +786,23 @@ def _create_booking(tool_input: Dict) -> Dict:
         "guest_email": customer_id,
         "guest_phone": phone,
         "customer_id": customer_id,
-        "status": "confirmed",
+        "status": "pending_payment",
         "total_inr": price["total_inr"],
         "currency": "INR",
         "price": price,
+        "razorpay_order_id": "",
+        "razorpay_payment_id": "",
+        "razorpay_signature": "",
+        "paid_at": "",
+        "payment": {
+            "provider": "razorpay",
+            "status": "pending",
+            "order_id": "",
+            "payment_id": "",
+            "signature": "",
+            "amount_paise": int(round(float(price["total_inr"]) * 100)),
+            "currency": "INR",
+        },
         "created_at": now,
     }
     catalog_db.insert_booking(booking)
@@ -799,6 +839,10 @@ def _modify_booking(tool_input: Dict) -> Dict:
         return error
     if booking.get("status") == "cancelled":
         return {"error": "Cannot modify a cancelled booking"}
+    if booking.get("status") == "pending_payment":
+        return {"error": "Complete or cancel payment before changing this stay."}
+    if booking.get("status") == "payment_failed":
+        return {"error": "This stay was not paid. Book again."}
 
     hotel_id = booking["hotel_id"]
     room_id = tool_input.get("room_id") or booking["room_id"]

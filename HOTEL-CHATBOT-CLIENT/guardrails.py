@@ -92,6 +92,11 @@ _HOTEL_HINTS = (
     "picture",
     "image",
     "gallery",
+    "ticket",
+    "pay",
+    "payment",
+    "receipt",
+    "invoice",
     "htl-pun",
     "bk-",
     "night",
@@ -262,10 +267,11 @@ def security_headers() -> Dict[str, str]:
     return {
         "Content-Security-Policy": (
             "default-src 'self'; "
-            "script-src 'self'; "
+            "script-src 'self' https://checkout.razorpay.com; "
             "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: https://images.unsplash.com; "
-            "connect-src 'self'; "
+            "img-src 'self' data: https://images.unsplash.com https://*.razorpay.com; "
+            "connect-src 'self' https://api.razorpay.com https://lumberjack.razorpay.com https://checkout.razorpay.com; "
+            "frame-src https://api.razorpay.com https://checkout.razorpay.com https://*.razorpay.com; "
             "frame-ancestors 'none'; "
             "base-uri 'self'"
         ),

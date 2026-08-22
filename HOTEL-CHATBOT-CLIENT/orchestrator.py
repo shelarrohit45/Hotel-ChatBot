@@ -17,6 +17,8 @@ from anthropic import AsyncAnthropic
 from config import CLIENT_ROOT, Settings, get_settings
 from guardrails import inspect_user_message, redact_output, validate_tool_call
 from mcp_bridge import McpBridge
+from payments import create_checkout, keys_ready
+from user_store import attach_razorpay_order
 
 logger = logging.getLogger(__name__)
 
@@ -86,12 +88,15 @@ class HotelOrchestrator:
                 "history": history,
                 "tools_called": [],
                 "images": [],
+                "payment": None,
+                "pay_booking_id": None,
                 "blocked": True,
             }
 
         messages = _trim_history(history) + [{"role": "user", "content": cleaned}]
         tools_called: list[str] = []
         photos: list[dict[str, str]] = []
+        unpaid: Optional[dict[str, Any]] = None
         client = self._client_or_raise()
         retried_fresh = False
         system = _system_with_guest(self.system_prompt, guest)
@@ -119,11 +124,15 @@ class HotelOrchestrator:
             if not tool_uses:
                 text = _text_from_blocks(assistant_blocks)
                 photos = await self._photos_for_reply(cleaned, messages, photos, cached_images)
+                payment = await self._checkout_for(unpaid, guest)
                 return {
                     "text": redact_output(text),
                     "history": _trim_history(messages),
                     "tools_called": tools_called,
                     "images": photos,
+                    "payment": payment,
+                    "pay_booking_id": (unpaid or {}).get("booking_id"),
+                    "pay_amount_inr": (unpaid or {}).get("total_inr"),
                     "blocked": False,
                 }
 
@@ -139,6 +148,10 @@ class HotelOrchestrator:
                     logger.warning("tool %s failed: %s", name, type(exc).__name__)
                     payload = {"error": "Tool call was blocked or failed."}
                 _collect_hotel_photos(payload, photos)
+                if name == "create_booking" and isinstance(payload, dict):
+                    booking = payload.get("booking")
+                    if isinstance(booking, dict) and booking.get("booking_id"):
+                        unpaid = booking
                 results.append(
                     {
                         "type": "tool_result",
@@ -149,13 +162,35 @@ class HotelOrchestrator:
             messages.append({"role": "user", "content": results})
 
         photos = await self._photos_for_reply(cleaned, messages, photos, cached_images)
+        payment = await self._checkout_for(unpaid, guest)
         return {
             "text": "I could not finish that booking request. Please try a shorter question.",
             "history": _trim_history(messages),
             "tools_called": tools_called,
             "images": photos,
+            "payment": payment,
+            "pay_booking_id": (unpaid or {}).get("booking_id"),
+            "pay_amount_inr": (unpaid or {}).get("total_inr"),
             "blocked": False,
         }
+
+    async def _checkout_for(
+        self,
+        booking: Optional[dict[str, Any]],
+        guest: Optional[dict[str, Any]],
+    ) -> Optional[dict[str, Any]]:
+        if not booking or not guest:
+            return None
+        if not keys_ready(self.settings):
+            logger.warning("razorpay keys missing; booking left pending_payment")
+            return None
+        try:
+            checkout = await create_checkout(booking, guest)
+            attach_razorpay_order(checkout["booking_id"], checkout["order_id"], checkout["amount"])
+            return checkout
+        except Exception as exc:
+            logger.warning("razorpay checkout failed: %s", type(exc).__name__)
+            return None
 
     async def _photos_for_reply(
         self,

@@ -97,6 +97,8 @@ def ensure_indexes() -> None:
     bookings_col().create_index("booking_id", unique=True)
     bookings_col().create_index("guest_phone")
     bookings_col().create_index("customer_id")
+    bookings_col().create_index("razorpay_order_id")
+    bookings_col().create_index("razorpay_payment_id")
     bookings_col().create_index(
         [("hotel_id", ASCENDING), ("room_id", ASCENDING), ("status", ASCENDING)]
     )
@@ -218,7 +220,7 @@ def overlapping_count(
     query: dict[str, Any] = {
         "hotel_id": hotel_id,
         "room_id": room_id,
-        "status": {"$ne": "cancelled"},
+        "status": {"$in": ["confirmed", "pending_payment", "modified"]},
         "check_in": {"$lt": check_out},
         "check_out": {"$gt": check_in},
     }
@@ -331,3 +333,233 @@ def save_login_session(session_id: str, user: dict) -> None:
 def delete_login_session(session_id: str) -> None:
     if session_id:
         sessions_col().delete_one({"_id": session_id})
+
+
+def attach_razorpay_order(booking_id: str, order_id: str, amount_paise: int) -> Optional[dict]:
+    now = _now()
+    bookings_col().update_one(
+        {"booking_id": booking_id},
+        {
+            "$set": {
+                "razorpay_order_id": order_id,
+                "razorpay_amount_paise": amount_paise,
+                "payment.provider": "razorpay",
+                "payment.status": "pending",
+                "payment.order_id": order_id,
+                "payment.amount_paise": amount_paise,
+                "payment.currency": "INR",
+                "updated_at": now,
+            }
+        },
+    )
+    return get_booking(booking_id)
+
+
+def confirm_booking_payment(
+    booking_id: str,
+    phone: str,
+    email: str,
+    payment_id: str,
+    order_id: str,
+    signature: str = "",
+) -> tuple[Optional[dict], Optional[str]]:
+    booking = get_booking(booking_id)
+    if not booking:
+        return None, "Booking not found."
+    booked_phone = normalize_phone(booking.get("guest_phone"))
+    booked_email = str(booking.get("guest_email") or booking.get("customer_id") or "").strip().lower()
+    if booked_phone != normalize_phone(phone) or booked_email != (email or "").strip().lower():
+        return None, "This booking does not match the signed-in guest."
+    stored_order = booking.get("razorpay_order_id") or ""
+    if stored_order and stored_order != order_id:
+        return None, "Payment does not match this booking."
+    if booking.get("status") == "confirmed" and booking.get("razorpay_payment_id") == payment_id:
+        rec = booking.get("receipt") if isinstance(booking.get("receipt"), dict) else None
+        if not rec:
+            rec = build_receipt(booking)
+            if rec:
+                bookings_col().update_one({"booking_id": booking_id}, {"$set": {"receipt": rec}})
+                booking = get_booking(booking_id)
+        return booking, None
+    if booking.get("status") not in {"pending_payment", "confirmed"}:
+        return None, "This booking cannot be paid now."
+    now = _now()
+    receipt = build_receipt(
+        {
+            **booking,
+            "status": "confirmed",
+            "razorpay_payment_id": payment_id,
+            "razorpay_order_id": order_id,
+            "paid_at": now,
+        }
+    )
+    bookings_col().update_one(
+        {"booking_id": booking_id},
+        {
+            "$set": {
+                "status": "confirmed",
+                "razorpay_payment_id": payment_id,
+                "razorpay_order_id": order_id,
+                "razorpay_signature": signature or booking.get("razorpay_signature") or "",
+                "paid_at": now,
+                "updated_at": now,
+                "receipt": receipt,
+                "payment.provider": "razorpay",
+                "payment.status": "captured",
+                "payment.order_id": order_id,
+                "payment.payment_id": payment_id,
+                "payment.signature": signature or "",
+                "payment.paid_at": now,
+            }
+        },
+    )
+    return get_booking(booking_id), None
+
+
+def fail_booking_payment(
+    booking_id: str,
+    phone: str,
+    email: str,
+    reason: str = "",
+    payment_id: str = "",
+    order_id: str = "",
+) -> tuple[Optional[dict], Optional[str]]:
+    booking = get_booking(booking_id)
+    if not booking:
+        return None, "Booking not found."
+    booked_phone = normalize_phone(booking.get("guest_phone"))
+    booked_email = str(booking.get("guest_email") or booking.get("customer_id") or "").strip().lower()
+    if booked_phone != normalize_phone(phone) or booked_email != (email or "").strip().lower():
+        return None, "This booking does not match the signed-in guest."
+    if booking.get("status") == "confirmed":
+        return booking, None
+    if booking.get("status") != "pending_payment":
+        return None, "This booking is not awaiting payment."
+    now = _now()
+    fields: dict[str, Any] = {
+        "status": "payment_failed",
+        "payment_error": (reason or "Payment failed")[:200],
+        "updated_at": now,
+        "payment.provider": "razorpay",
+        "payment.status": "failed",
+        "payment.error": (reason or "Payment failed")[:200],
+        "payment.failed_at": now,
+    }
+    if order_id:
+        fields["razorpay_order_id"] = order_id
+        fields["payment.order_id"] = order_id
+    if payment_id:
+        fields["razorpay_payment_id"] = payment_id
+        fields["payment.payment_id"] = payment_id
+    bookings_col().update_one({"booking_id": booking_id}, {"$set": fields})
+    return get_booking(booking_id), None
+
+
+def booking_for_payment(booking_id: str, phone: str, email: str) -> tuple[Optional[dict], Optional[str]]:
+    booking = get_booking(booking_id)
+    if not booking:
+        return None, "Booking not found."
+    booked_phone = normalize_phone(booking.get("guest_phone"))
+    booked_email = str(booking.get("guest_email") or booking.get("customer_id") or "").strip().lower()
+    if booked_phone != normalize_phone(phone) or booked_email != (email or "").strip().lower():
+        return None, "This booking does not match the signed-in guest."
+    if booking.get("status") == "confirmed":
+        return None, "This stay is already paid."
+    if booking.get("status") == "cancelled":
+        return None, "This booking is cancelled."
+    if booking.get("status") not in {"pending_payment", "payment_failed"}:
+        return None, "This booking cannot be paid now."
+    if booking.get("status") == "payment_failed":
+        bookings_col().update_one(
+            {"booking_id": booking_id},
+            {"$set": {"status": "pending_payment", "updated_at": _now()}},
+        )
+        booking = get_booking(booking_id)
+    return booking, None
+
+
+def build_receipt(booking: dict[str, Any]) -> Optional[dict]:
+    booking_id = str(booking.get("booking_id") or "")
+    payment_id = str(
+        booking.get("razorpay_payment_id")
+        or (booking.get("payment") or {}).get("payment_id")
+        or ""
+    )
+    if not booking_id or not payment_id:
+        return None
+    order_id = str(
+        booking.get("razorpay_order_id")
+        or (booking.get("payment") or {}).get("order_id")
+        or ""
+    )
+    paid_at = str(booking.get("paid_at") or (booking.get("payment") or {}).get("paid_at") or "")
+    return {
+        "receipt_id": f"RCPT-{booking_id}",
+        "booking_id": booking_id,
+        "payment_id": payment_id,
+        "order_id": order_id,
+        "status": "paid",
+        "hotel_name": booking.get("hotel_name") or "",
+        "hotel_area": booking.get("hotel_area") or "",
+        "room_name": booking.get("room_name") or "",
+        "check_in": booking.get("check_in") or "",
+        "check_out": booking.get("check_out") or "",
+        "nights": booking.get("nights") or 0,
+        "guests": booking.get("guests") or 0,
+        "guest_name": booking.get("guest_name") or "",
+        "guest_email": booking.get("guest_email") or "",
+        "guest_phone": booking.get("guest_phone") or "",
+        "total_inr": booking.get("total_inr") or 0,
+        "currency": booking.get("currency") or "INR",
+        "paid_at": paid_at,
+        "provider": "Razorpay",
+    }
+
+
+def _owned_by(booking: dict, phone: str, email: str) -> bool:
+    booked_phone = normalize_phone(booking.get("guest_phone"))
+    booked_email = str(booking.get("guest_email") or booking.get("customer_id") or "").strip().lower()
+    return booked_phone == normalize_phone(phone) and booked_email == (email or "").strip().lower()
+
+
+def list_receipts_for(phone: str, email: str, booking_id: str = "") -> list[dict]:
+    wanted = (booking_id or "").strip().upper()
+    rows = list_bookings_for(email, phone)
+    receipts: list[dict] = []
+    for booking in rows:
+        if booking.get("status") != "confirmed":
+            continue
+        if wanted and str(booking.get("booking_id") or "").upper() != wanted:
+            continue
+        rec = booking.get("receipt") if isinstance(booking.get("receipt"), dict) else None
+        if not rec or not rec.get("receipt_id"):
+            rec = build_receipt(booking)
+            if rec:
+                bookings_col().update_one(
+                    {"booking_id": booking["booking_id"]},
+                    {"$set": {"receipt": rec, "updated_at": _now()}},
+                )
+        if rec:
+            receipts.append(rec)
+    return receipts
+
+
+def get_receipt_for_guest(booking_id: str, phone: str, email: str) -> tuple[Optional[dict], Optional[str]]:
+    booking = get_booking(booking_id)
+    if not booking:
+        return None, "Booking not found."
+    if not _owned_by(booking, phone, email):
+        return None, "This receipt does not match the signed-in guest."
+    if booking.get("status") != "confirmed":
+        return None, "This stay is not paid yet."
+    rec = booking.get("receipt") if isinstance(booking.get("receipt"), dict) else None
+    if not rec or not rec.get("receipt_id"):
+        rec = build_receipt(booking)
+        if rec:
+            bookings_col().update_one(
+                {"booking_id": booking_id},
+                {"$set": {"receipt": rec, "updated_at": _now()}},
+            )
+    if not rec:
+        return None, "No payment receipt for this booking."
+    return rec, None

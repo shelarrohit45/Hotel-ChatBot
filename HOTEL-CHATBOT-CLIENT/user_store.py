@@ -36,3 +36,40 @@ def save_login_session(session_id: str, user: dict) -> None:
 
 def delete_login_session(session_id: str) -> None:
     _catalog_db().delete_login_session(session_id)
+
+
+def attach_razorpay_order(booking_id: str, order_id: str, amount_paise: int):
+    return _catalog_db().attach_razorpay_order(booking_id, order_id, amount_paise)
+
+
+def confirm_booking_payment(
+    booking_id: str, phone: str, email: str, payment_id: str, order_id: str, signature: str = ""
+):
+    return _catalog_db().confirm_booking_payment(
+        booking_id, phone, email, payment_id, order_id, signature
+    )
+
+
+def fail_booking_payment(
+    booking_id: str,
+    phone: str,
+    email: str,
+    reason: str = "",
+    payment_id: str = "",
+    order_id: str = "",
+):
+    return _catalog_db().fail_booking_payment(
+        booking_id, phone, email, reason, payment_id, order_id
+    )
+
+
+def booking_for_payment(booking_id: str, phone: str, email: str):
+    return _catalog_db().booking_for_payment(booking_id, phone, email)
+
+
+def list_receipts_for(phone: str, email: str, booking_id: str = ""):
+    return _catalog_db().list_receipts_for(phone, email, booking_id)
+
+
+def get_receipt_for_guest(booking_id: str, phone: str, email: str):
+    return _catalog_db().get_receipt_for_guest(booking_id, phone, email)

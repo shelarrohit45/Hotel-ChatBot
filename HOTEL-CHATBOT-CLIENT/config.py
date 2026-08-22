@@ -40,6 +40,8 @@ class Settings(BaseSettings):
         default=CLIENT_ROOT.parent / "HOTEL-CHATBOT-MCP",
         alias="MCP_SERVER_CWD",
     )
+    razorpay_key_id: str = Field(default="", alias="RAZORPAY_KEY_ID")
+    razorpay_key_secret: str = Field(default="", alias="RAZORPAY_KEY_SECRET")
 
     @field_validator("mcp_server_python", mode="before")
     @classmethod

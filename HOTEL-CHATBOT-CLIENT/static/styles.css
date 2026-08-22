@@ -379,3 +379,96 @@ button[type="submit"]:disabled { opacity: 0.35; cursor: default; }
   .desk { max-width: none; padding: 0 16px; }
   .photos { grid-template-columns: 1fr 1fr; }
 }
+
+.pay-row { margin-top: 12px; }
+
+.pay-now {
+  border: 0;
+  height: 48px;
+  padding: 0 22px;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.receipt {
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  background: #fff;
+  max-width: 420px;
+}
+
+.receipt-kicker {
+  margin: 0 0 6px;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.receipt h3 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.receipt-meta {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.pay-toast {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(14, 13, 11, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.pay-toast[hidden] { display: none; }
+
+.pay-card {
+  width: min(420px, 100%);
+  background: var(--paper);
+  padding: 28px 24px 22px;
+  border: 1px solid var(--line);
+}
+
+.pay-card h3 {
+  margin: 0 0 10px;
+  font-size: 24px;
+  font-weight: 500;
+}
+
+.pay-card p {
+  margin: 0 0 22px;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.pay-card.ok h3 { color: #2f6b3a; }
+.pay-card.bad h3 { color: var(--copper); }
+
+.pay-card button {
+  border: 0;
+  height: 48px;
+  width: 100%;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
