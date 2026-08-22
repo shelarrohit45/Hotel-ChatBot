@@ -162,7 +162,7 @@
         <li>Open the live URL. First screen is guest identity (name, email, 10-digit mobile) — not Google OAuth. Cookie <code>hotel_sid</code> is httponly.</li>
         <li>Chat: “2 guests in Pune from 10 to 12 Sep 2026”. Composer stays at the bottom; replies scroll above it. Past dates are refused at the tool layer (India time; check-in today or later).</li>
         <li>“Show me photos of JW Marriott” — pictures come from tool JSON, not from URLs pasted in the model text.</li>
-        <li>Book a room. Booking id looks like <code>BK-1xxx</code>. Status is <code>pending_payment</code> until Razorpay Test Mode succeeds. Tap Pay now in chat; on success stay on the thread (no overlay). A receipt card appears with Download.</li>
+        <li>Book a room. Booking id looks like <code>BK-1xxx</code>. Status is <code>pending_payment</code> until Razorpay Test Mode succeeds. Tap Pay now in chat. Success or fail stays in the thread (no overlay). A paid stay shows a receipt card with Download.</li>
         <li>“Show me my payment receipt” then “What are my bookings?” then cancel. Log out, sign in as someone else, try the same <code>BK-…</code> — it must refuse.</li>
         <li>Ask for weather or Python. Guardrails / system prompt keep it on Pune hotels.</li>
       </ol>
@@ -226,7 +226,7 @@
         → if create_booking: host creates Razorpay order
   → redact output (secrets, tool names)
   → JSON { text, blocked, images[], payment, receipts[] }
-  → UI: text + photos + Pay now (Checkout). Success stays in chat.
+  → UI: text + photos + Pay now (Checkout). Success or fail stays in chat.
 POST /pay/verify   HMAC signature → status confirmed + receipt
 GET  /receipt/{id} HTML download if signed-in owner</pre>
 
@@ -361,8 +361,8 @@ GET  /receipt/{booking_id}</pre>
         signature on <code>POST /pay/verify</code>. Only then does the booking become
         <code>confirmed</code> and a <code>receipt</code> object is stored on the booking
         (<code>RCPT-BK-…</code>). Success stays on the chat thread: confirmation text plus
-        a receipt card. There is no “back to chat” overlay. Failure or dismiss sets
-        <code>payment_failed</code> so the room is released.
+        a receipt card. There is no overlay after pay or fail — both results are chat
+        messages. Failure or dismiss sets <code>payment_failed</code> so the room is released.
       </p>
       <p>
         “Show me my payment receipt” is handled on the host: ownership is the same
@@ -396,7 +396,7 @@ GET  /receipt/{booking_id}</pre>
       <ul>
         <li>Guest screen: dark stage + cream form. On phones the cream panel fills leftover viewport so there is no black band under the button.</li>
         <li>Chat: header, scrollable thread, composer pinned to the bottom of the viewport (<code>100dvh</code> flex column, <code>min-height: 0</code> on the scroller).</li>
-        <li>No tool-name chips. Photos tap-open a lightbox. Pay now opens Razorpay Checkout. Paid stays get a receipt card in the thread. Static assets cache-busted with <code>?v=</code>.</li>
+        <li>No tool-name chips. Photos tap-open a lightbox. Pay now opens Razorpay Checkout. Paid or failed stays get a chat line (no overlay). Receipt card after a successful pay. Static assets cache-busted with <code>?v=</code>.</li>
       </ul>
 
       <h2 id="security">Security layers</h2>
@@ -523,8 +523,8 @@ GET  /receipt/{booking_id}</pre>
         <p class="a"><strong>A.</strong> Real Mongo documents. Payment is Razorpay Test Mode — no live money. Catalog is 50 Pune hotels. Cancel sets <code>status: cancelled</code> and keeps the row. Unpaid checkouts become <code>payment_failed</code> so they do not hold inventory. A stay is not confirmed until HMAC verify succeeds.</p>
       </div>
       <div class="qa">
-        <p class="q">Q. Why no success popup after pay?</p>
-        <p class="a"><strong>A.</strong> Checkout already ran on the chat page. A modal that says “back to chat” is extra chrome. Verify writes confirmed + receipt, then the thread shows the confirmation and a download button. Failures can still surface a short error; the guest never leaves the desk.</p>
+        <p class="q">Q. Why no popup after pay or fail?</p>
+        <p class="a"><strong>A.</strong> Checkout already ran on the chat page. A modal that says “back to chat” is extra chrome. Verify writes confirmed + receipt in the thread, or a short failure line if the guest dismisses or the card fails. They never leave the desk.</p>
       </div>
       <div class="qa">
         <p class="q">Q. Can someone search last year’s dates?</p>

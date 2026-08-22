@@ -13,11 +13,6 @@ const lightbox = document.getElementById("lightbox");
 const lightboxImage = document.getElementById("lightbox-image");
 const lightboxCaption = document.getElementById("lightbox-caption");
 const lightboxClose = document.getElementById("lightbox-close");
-const payToast = document.getElementById("pay-toast");
-const payCard = payToast ? payToast.querySelector(".pay-card") : null;
-const payTitle = document.getElementById("pay-title");
-const payCopy = document.getElementById("pay-copy");
-const payOk = document.getElementById("pay-toast-ok");
 
 let ready = false;
 let paying = false;
@@ -133,10 +128,9 @@ async function sendMessage(text) {
       if (data.payment && data.payment.order_id) {
         openCheckout(data.payment);
       } else {
-        showPayToast(
-          false,
-          "Payment keys missing",
-          "Add Razorpay Test Key Id and Key Secret to HOTEL-CHATBOT-CLIENT/.env, restart the server, then tap Pay now."
+        addMessage(
+          "assistant",
+          "Payment is not set up yet. Add Razorpay Test Key Id and Key Secret, restart the server, then tap Pay now."
         );
       }
     }
@@ -216,27 +210,6 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && lightbox && !lightbox.hidden) closeLightbox();
 });
 
-function showPayToast(ok, title, copy) {
-  if (!payToast || !payCard || !payTitle || !payCopy) return;
-  payCard.className = "pay-card " + (ok ? "ok" : "bad");
-  payTitle.textContent = title;
-  payCopy.textContent = copy;
-  payToast.hidden = false;
-}
-
-function hidePayToast() {
-  if (!payToast) return;
-  payToast.hidden = true;
-  input.focus();
-}
-
-if (payOk) payOk.addEventListener("click", hidePayToast);
-if (payToast) {
-  payToast.addEventListener("click", (event) => {
-    if (event.target === payToast) hidePayToast();
-  });
-}
-
 function addReceipts(wrap, receipts) {
   receipts.forEach((item) => {
     const card = document.createElement("div");
@@ -276,7 +249,7 @@ async function downloadReceipt(bookingId) {
     });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
-      showPayToast(false, "Receipt unavailable", data.error || "Could not download that receipt.");
+      addMessage("assistant", data.error || "Could not download that receipt.");
       return;
     }
     const blob = await response.blob();
@@ -289,7 +262,7 @@ async function downloadReceipt(bookingId) {
     link.remove();
     URL.revokeObjectURL(url);
   } catch (err) {
-    showPayToast(false, "Receipt unavailable", "Could not download that receipt.");
+    addMessage("assistant", "Could not download that receipt.");
   }
 }
 
@@ -317,7 +290,7 @@ function addPayButton(wrap, bookingId, amountInr, payment) {
       });
       const data = await response.json();
       if (!response.ok || !data.payment) {
-        showPayToast(false, "Payment unavailable", data.error || "Could not open Razorpay.");
+        addMessage("assistant", data.error || "Could not open payment.");
         return;
       }
       openCheckout(data.payment);
@@ -333,7 +306,7 @@ function addPayButton(wrap, bookingId, amountInr, payment) {
 
 function openCheckout(payment) {
   if (typeof Razorpay !== "function") {
-    showPayToast(false, "Payment unavailable", "The payment window could not load. Refresh and try booking again.");
+    addMessage("assistant", "The payment window could not load. Refresh and try booking again.");
     return;
   }
   if (paying) return;
@@ -354,7 +327,7 @@ function openCheckout(payment) {
           if (success) return;
           paying = false;
           markPayFailed(payment.booking_id, "Payment window closed", payment.order_id, "");
-          showPayToast(false, "Payment failed", "The payment was cancelled. You are back on the chat. Say book again if you still want the stay.");
+          addMessage("assistant", "Payment was cancelled. Tap Pay now or say book again if you still want the stay.");
         }, 500);
       },
     },
@@ -373,7 +346,7 @@ function openCheckout(payment) {
       ? response.error.metadata.payment_id
       : "";
     markPayFailed(payment.booking_id, reason, payment.order_id, failedId);
-    showPayToast(false, "Payment failed", reason + " You are back on the chat.");
+    addMessage("assistant", reason + " Payment did not go through. Tap Pay now to try again.");
   });
   checkout.open();
 }
@@ -393,13 +366,13 @@ async function confirmPay(bookingId, response) {
     });
     const data = await result.json();
     if (!result.ok || !data.ok) {
-      showPayToast(false, "Payment failed", data.error || "The payment could not be confirmed. You are back on the chat.");
+      addMessage("assistant", data.error || "The payment could not be confirmed. Tap Pay now to try again.");
       return;
     }
     const paid = addMessage("assistant", "Payment received. Booking " + (data.booking_id || "") + " is confirmed.");
     if (data.receipt) addReceipts(paid, [data.receipt]);
   } catch (err) {
-    showPayToast(false, "Payment failed", "Could not confirm the payment. You are back on the chat.");
+    addMessage("assistant", "Could not confirm the payment. Tap Pay now to try again.");
   }
 }
 
