@@ -22,7 +22,7 @@ from config import CLIENT_ROOT, get_settings
 from guardrails import RateLimiter, redact_output, security_headers
 from mcp_bridge import McpBridge
 from orchestrator import HotelOrchestrator
-from payments import create_checkout, keys_ready, verify_signature
+from payments import create_checkout, keys_ready, verify_signature, wants_payment
 from receipts import booking_id_in, receipt_html, wants_receipt
 from user_store import (
     attach_razorpay_order,
@@ -35,6 +35,7 @@ from user_store import (
     load_login_session,
     public_user,
     save_login_session,
+    unpaid_booking_for,
     upsert_guest,
 )
 
@@ -160,6 +161,60 @@ def _guest_from_session(bag: dict[str, Any]) -> Optional[dict[str, Any]]:
     }
 
 
+async def _retry_checkout(message: str, guest: dict[str, Any], bag: dict[str, Any]) -> Optional[JSONResponse]:
+    from_message = booking_id_in(message)
+    wanted = from_message or bag.get("last_pay_booking_id") or ""
+    unpaid = unpaid_booking_for(guest["phone"], guest["email"], wanted)
+    if not unpaid and not from_message:
+        unpaid = unpaid_booking_for(guest["phone"], guest["email"], "")
+    if not unpaid:
+        return None
+    booking, error = booking_for_payment(
+        unpaid["booking_id"], guest["phone"], guest["email"]
+    )
+    if error or not booking:
+        return None
+    if not keys_ready():
+        body = JSONResponse(
+            {
+                "text": "Payment is not set up yet. Add Razorpay test keys and restart, then ask to pay again.",
+                "blocked": False,
+                "images": [],
+                "payment": None,
+                "pay_booking_id": booking.get("booking_id"),
+                "pay_amount_inr": booking.get("total_inr"),
+                "receipts": [],
+            }
+        )
+        bag["last_pay_booking_id"] = booking.get("booking_id")
+        return body
+    try:
+        checkout = await create_checkout(booking, guest)
+        attach_razorpay_order(checkout["booking_id"], checkout["order_id"], checkout["amount"])
+    except Exception:
+        logger.warning("razorpay retry failed")
+        return None
+    hotel = booking.get("hotel_name") or "your stay"
+    booking_id = booking.get("booking_id") or ""
+    text = f"Opening payment for {hotel} ({booking_id}). Complete the Razorpay window to confirm the stay."
+    history = list(bag.get("history") or [])
+    history.append({"role": "user", "content": message})
+    history.append({"role": "assistant", "content": [{"type": "text", "text": text}]})
+    bag["history"] = history
+    bag["last_pay_booking_id"] = booking_id
+    return JSONResponse(
+        {
+            "text": text,
+            "blocked": False,
+            "images": [],
+            "payment": checkout,
+            "pay_booking_id": booking_id,
+            "pay_amount_inr": booking.get("total_inr"),
+            "receipts": [],
+        }
+    )
+
+
 @app.get("/")
 async def index(request: Request):
     page = STATIC_DIR / "index.html"
@@ -251,6 +306,12 @@ async def chat(payload: ChatIn, request: Request):
         _set_session_cookie(body, session_id)
         return body
 
+    if guest and wants_payment(payload.message) and not wants_receipt(payload.message):
+        retry = await _retry_checkout(payload.message, guest, bag)
+        if retry:
+            _set_session_cookie(retry, session_id)
+            return retry
+
     try:
         result = await orchestrator.reply(
             payload.message,
@@ -276,6 +337,8 @@ async def chat(payload: ChatIn, request: Request):
     bag["history"] = result["history"]
     if result.get("images"):
         bag["images"] = result["images"]
+    if result.get("pay_booking_id"):
+        bag["last_pay_booking_id"] = result["pay_booking_id"]
     receipts = []
     if guest and not result.get("blocked") and wants_receipt(payload.message):
         receipts = list_receipts_for(

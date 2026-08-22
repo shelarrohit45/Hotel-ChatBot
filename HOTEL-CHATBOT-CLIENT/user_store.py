@@ -67,6 +67,10 @@ def booking_for_payment(booking_id: str, phone: str, email: str):
     return _catalog_db().booking_for_payment(booking_id, phone, email)
 
 
+def unpaid_booking_for(phone: str, email: str, booking_id: str = ""):
+    return _catalog_db().unpaid_booking_for(phone, email, booking_id)
+
+
 def list_receipts_for(phone: str, email: str, booking_id: str = ""):
     return _catalog_db().list_receipts_for(phone, email, booking_id)
 

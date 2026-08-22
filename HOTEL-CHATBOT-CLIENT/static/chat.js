@@ -124,7 +124,7 @@ async function sendMessage(text) {
     const wrap = addMessage("assistant", data.text || "No reply.", data.images || []);
     const bookingId = data.pay_booking_id || (data.payment && data.payment.booking_id);
     if (bookingId) {
-      addPayButton(wrap, bookingId, data.pay_amount_inr, data.payment);
+      addPayButton(wrap, bookingId, data.pay_amount_inr);
       if (data.payment && data.payment.order_id) {
         openCheckout(data.payment);
       } else {
@@ -266,7 +266,7 @@ async function downloadReceipt(bookingId) {
   }
 }
 
-function addPayButton(wrap, bookingId, amountInr, payment) {
+function addPayButton(wrap, bookingId, amountInr) {
   const row = document.createElement("div");
   row.className = "pay-row";
   const button = document.createElement("button");
@@ -278,10 +278,6 @@ function addPayButton(wrap, bookingId, amountInr, payment) {
     if (paying) return;
     button.disabled = true;
     try {
-      if (payment && payment.order_id) {
-        openCheckout(payment);
-        return;
-      }
       const response = await fetch("/pay/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -302,6 +298,18 @@ function addPayButton(wrap, bookingId, amountInr, payment) {
   wrap.appendChild(row);
   const pane = conversation || thread;
   pane.scrollTop = pane.scrollHeight;
+}
+
+function rupeesFromPayment(payment) {
+  if (!payment || payment.amount == null) return "";
+  return Math.round(Number(payment.amount) / 100);
+}
+
+function sayPayFailed(payment, text) {
+  const wrap = addMessage("assistant", text);
+  if (payment && payment.booking_id) {
+    addPayButton(wrap, payment.booking_id, rupeesFromPayment(payment));
+  }
 }
 
 function openCheckout(payment) {
@@ -327,14 +335,14 @@ function openCheckout(payment) {
           if (success) return;
           paying = false;
           markPayFailed(payment.booking_id, "Payment window closed", payment.order_id, "");
-          addMessage("assistant", "Payment was cancelled. Tap Pay now or say book again if you still want the stay.");
+          sayPayFailed(payment, "Payment was cancelled. Tap Pay now or say payment screen to try again.");
         }, 500);
       },
     },
     handler: function (response) {
       success = true;
       paying = false;
-      confirmPay(payment.booking_id, response);
+      confirmPay(payment.booking_id, response, payment);
     },
   };
   const checkout = new Razorpay(options);
@@ -346,12 +354,12 @@ function openCheckout(payment) {
       ? response.error.metadata.payment_id
       : "";
     markPayFailed(payment.booking_id, reason, payment.order_id, failedId);
-    addMessage("assistant", reason + " Payment did not go through. Tap Pay now to try again.");
+    sayPayFailed(payment, reason + " Payment did not go through. Tap Pay now or say payment screen to try again.");
   });
   checkout.open();
 }
 
-async function confirmPay(bookingId, response) {
+async function confirmPay(bookingId, response, payment) {
   try {
     const result = await fetch("/pay/verify", {
       method: "POST",
@@ -366,13 +374,13 @@ async function confirmPay(bookingId, response) {
     });
     const data = await result.json();
     if (!result.ok || !data.ok) {
-      addMessage("assistant", data.error || "The payment could not be confirmed. Tap Pay now to try again.");
+      sayPayFailed(payment, data.error || "The payment could not be confirmed. Tap Pay now or say payment screen to try again.");
       return;
     }
     const paid = addMessage("assistant", "Payment received. Booking " + (data.booking_id || "") + " is confirmed.");
     if (data.receipt) addReceipts(paid, [data.receipt]);
   } catch (err) {
-    addMessage("assistant", "Could not confirm the payment. Tap Pay now to try again.");
+    sayPayFailed(payment, "Could not confirm the payment. Tap Pay now or say payment screen to try again.");
   }
 }
 

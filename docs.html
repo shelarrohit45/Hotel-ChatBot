@@ -162,7 +162,7 @@
         <li>Open the live URL. First screen is guest identity (name, email, 10-digit mobile) — not Google OAuth. Cookie <code>hotel_sid</code> is httponly.</li>
         <li>Chat: “2 guests in Pune from 10 to 12 Sep 2026”. Composer stays at the bottom; replies scroll above it. Past dates are refused at the tool layer (India time; check-in today or later).</li>
         <li>“Show me photos of JW Marriott” — pictures come from tool JSON, not from URLs pasted in the model text.</li>
-        <li>Book a room. Booking id looks like <code>BK-1xxx</code>. Status is <code>pending_payment</code> until Razorpay Test Mode succeeds. Tap Pay now in chat. Success or fail stays in the thread (no overlay). A paid stay shows a receipt card with Download.</li>
+        <li>Book a room. Booking id looks like <code>BK-1xxx</code>. Status is <code>pending_payment</code> until Razorpay Test Mode succeeds. Tap Pay now in chat. Success or fail stays in the thread (no overlay). A paid stay shows a receipt card with Download. After a fail or cancel, say “payment screen” or tap Pay now — Checkout opens again for the same booking.</li>
         <li>“Show me my payment receipt” then “What are my bookings?” then cancel. Log out, sign in as someone else, try the same <code>BK-…</code> — it must refuse.</li>
         <li>Ask for weather or Python. Guardrails / system prompt keep it on Pune hotels.</li>
       </ol>
@@ -363,6 +363,9 @@ GET  /receipt/{booking_id}</pre>
         (<code>RCPT-BK-…</code>). Success stays on the chat thread: confirmation text plus
         a receipt card. There is no overlay after pay or fail — both results are chat
         messages. Failure or dismiss sets <code>payment_failed</code> so the room is released.
+        Saying “payment screen”, “pay again”, or “pay now” reopens Checkout for that unpaid
+        stay (a new Razorpay order). It does not create a second booking. Pay now on the
+        thread does the same.
       </p>
       <p>
         “Show me my payment receipt” is handled on the host: ownership is the same
@@ -525,6 +528,10 @@ GET  /receipt/{booking_id}</pre>
       <div class="qa">
         <p class="q">Q. Why no popup after pay or fail?</p>
         <p class="a"><strong>A.</strong> Checkout already ran on the chat page. A modal that says “back to chat” is extra chrome. Verify writes confirmed + receipt in the thread, or a short failure line if the guest dismisses or the card fails. They never leave the desk.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Q. What if they cancel Razorpay and want to pay later?</p>
+        <p class="a"><strong>A.</strong> Status becomes <code>payment_failed</code> so the room is not held forever. “Pay again” / “payment screen” is handled on the host: find that unpaid booking, flip it back to <code>pending_payment</code>, create a new Razorpay order, open Checkout. We do not call <code>create_booking</code> again. Pay now always hits <code>/pay/start</code> for a fresh order because a failed Razorpay order cannot be reused.</p>
       </div>
       <div class="qa">
         <p class="q">Q. Can someone search last year’s dates?</p>

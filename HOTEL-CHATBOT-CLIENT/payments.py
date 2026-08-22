@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import re
 from typing import Any, Optional
 
 import httpx
@@ -14,6 +15,26 @@ from config import Settings, get_settings
 logger = logging.getLogger(__name__)
 
 RAZORPAY_ORDERS = "https://api.razorpay.com/v1/orders"
+_PAY_ASK = re.compile(
+    r"\b("
+    r"pay(\s+now|\s+again)?|"
+    r"payment\s+(screen|window|page|again|gateway)|"
+    r"open\s+(the\s+)?(payment|pay|checkout)|"
+    r"(complete|retry|make|do)\s+(the\s+)?payment|"
+    r"try\s+(to\s+)?pay|"
+    r"razorpay|"
+    r"checkout"
+    r")\b",
+    re.I,
+)
+_RECEIPT_ASK = re.compile(r"\b(receipt|invoice|payment\s+proof|payment\s+slip)\b", re.I)
+
+
+def wants_payment(text: str) -> bool:
+    message = text or ""
+    if _RECEIPT_ASK.search(message):
+        return False
+    return bool(_PAY_ASK.search(message))
 
 
 def keys_ready(settings: Optional[Settings] = None) -> bool:

@@ -522,6 +522,19 @@ def _owned_by(booking: dict, phone: str, email: str) -> bool:
     return booked_phone == normalize_phone(phone) and booked_email == (email or "").strip().lower()
 
 
+def unpaid_booking_for(phone: str, email: str, booking_id: str = "") -> Optional[dict]:
+    wanted = (booking_id or "").strip().upper()
+    unpaid_statuses = {"pending_payment", "payment_failed"}
+    rows = list(reversed(list_bookings_for(email, phone)))
+    for booking in rows:
+        if booking.get("status") not in unpaid_statuses:
+            continue
+        if wanted and str(booking.get("booking_id") or "").upper() != wanted:
+            continue
+        return booking
+    return None
+
+
 def list_receipts_for(phone: str, email: str, booking_id: str = "") -> list[dict]:
     wanted = (booking_id or "").strip().upper()
     rows = list_bookings_for(email, phone)
